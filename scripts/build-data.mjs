@@ -62,7 +62,9 @@ async function main() {
   if (!process.env.FRED_API_KEY) console.log('::warning::FRED_API_KEY secret is not set (or empty): FRED series will fail. Add it under Settings > Secrets and variables > Actions.');
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const archiveCsv = fs.existsSync(ARCHIVE) ? fs.readFileSync(ARCHIVE, 'utf8') : '';
-  const {snapshot, archiveCsv: newCsv} = await build({fredKey: process.env.FRED_API_KEY || '', prev, archiveCsv, html});
+  const fredKey = (process.env.FRED_API_KEY || '').trim().replace(/^["']|["']$/g, '');   // tolerate a pasted newline or quotes
+  if (fredKey && !/^[a-z0-9]{32}$/.test(fredKey)) console.log(`::warning::FRED_API_KEY doesn't look like a FRED key (expected 32 lowercase letters/digits, got ${fredKey.length} characters).`);
+  const {snapshot, archiveCsv: newCsv} = await build({fredKey, prev, archiveCsv, html});
 
   const lines = Object.entries(snapshot.series).map(([id, s]) => `| ${id} | ${s.state}${s.fb ? ' (fallback)' : ''} | ${s.n} | ${s.latest || ''} | ${(s.note || '').replace(/\|/g, '/').slice(0, 160)} |`);
   const summary = `### Data snapshot ${snapshot.generated}\n\n| series | state | rows | latest | note |\n|---|---|---|---|---|\n${lines.join('\n')}\n`;
