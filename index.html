@@ -98,6 +98,9 @@ body:not(.aview) #analysispage{display:none}
 #t-table td{padding:2px 6px}
 #t-table td.h{color:#111}
 #t-table tfoot td{background:var(--card);color:var(--muted)}
+#status{margin-top:8px}
+#status summary{cursor:pointer;user-select:none;width:max-content;max-width:100%}
+#stsum b{font-weight:600}
 footer{margin-top:30px;color:var(--muted);font-size:11.5px}
 </style>
 </head>
@@ -122,9 +125,11 @@ footer{margin-top:30px;color:var(--muted);font-size:11.5px}
     <button id="save">Save &amp; reload data</button> <button id="clearcache">Clear cache</button>
     <div class="muted" style="margin-top:6px">If the proxy prefix ends in <code>?</code>, <code>=</code> or contains <code>?</code>, the full target URL is percent-encoded and appended; otherwise it is appended raw. Settings are stored in this browser's localStorage only.</div>
   </div>
-  <div class="muted" style="margin-top:8px"><b style="color:var(--text)">Data status</b> — one chip per series (OK · OK via fallback · CACHED · BLOCKED (CORS) · FAILED · EMPTY). Hover a chip for detail.</div>
-  <div id="strip"></div>
-  <div id="notes"></div>
+  <details id="status"><summary><b>Data status</b> <span id="stsum" class="muted"></span></summary>
+    <div class="muted" style="margin-top:4px">One chip per series (OK · OK via fallback · CACHED · BLOCKED (CORS) · FAILED · EMPTY). Hover a chip for detail.</div>
+    <div id="strip"></div>
+    <div id="notes"></div>
+  </details>
   <div id="sections"></div>
   <div id="analysispage"></div>
   <div id="tablepage">
@@ -1303,6 +1308,12 @@ function renderStrip() {
   }
   if (SNAP_ERR) nh = `<div class="warn"><b>Daily snapshot unavailable</b> (${esc(SNAP_ERR)}): fetching live from each source instead.</div>` + nh;
   strip.innerHTML = h; notes.innerHTML = nh;
+  // one-line summary for the collapsed panel
+  const all = Object.values(STATUS), cnt = st => all.filter(st).length;
+  const ok = cnt(s => s.state === 'OK'), load = cnt(s => s.state === 'loading'), fb = cnt(s => s.state === 'OK' && s.fb), cached = cnt(s => s.state === 'CACHED'),
+    bad = cnt(s => s.state === 'FAILED' || s.state === 'BLOCKED'), empty = cnt(s => s.state === 'EMPTY');
+  $('#stsum').innerHTML = [`<b style="color:var(--ok)">${ok} OK</b>`, fb && `${fb} via fallback`, load && `<b style="color:var(--blue)">${load} loading</b>`, cached && `<b style="color:var(--warn)">${cached} cached</b>`,
+    empty && `<b style="color:var(--warn)">${empty} empty</b>`, bad && `<b style="color:var(--bad)">${bad} failed</b>`, SNAP_ERR && `<b style="color:var(--warn)">snapshot unavailable, fetched live</b>`].filter(Boolean).join(' · ') + ' — click to ' + ($('#status').open ? 'hide' : 'show');
   const ts = Object.values(STATUS).map(s => s.t).filter(Boolean);
   $('#lastref').textContent = SNAP ? 'snapshot ' + new Date(SNAP.generated).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : ts.length ? 'last fetch ' + fmtTime(Math.max(...ts)) : '';
 }
@@ -1541,6 +1552,10 @@ async function loadData(force) {
   }
   loadAll(force);
 }
+
+// the status panel remembers whether it was left open
+try { $('#status').open = localStorage.getItem('fmm_status_open') === '1'; } catch (e) {}
+$('#status').addEventListener('toggle', () => { try { localStorage.setItem('fmm_status_open', $('#status').open ? '1' : '0'); } catch (e) {} renderStrip(); });
 
 buildDOM();
 setView();
