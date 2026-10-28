@@ -208,8 +208,9 @@ const P = {};        // id -> load promise
 const RNG = {s2: {m: 6, from: ''}, s3: {m: 6, from: ''}, s4: {m: 6, from: ''}, s5: {m: 6, from: ''}, s6: {m: 24, from: ''}, s7: {m: 6, from: ''}, s8: {m: 6, from: ''}, s9: {m: 12, from: ''}, s11: {m: 12, from: ''}, s12: {m: 24, from: ''}};
 const HDR_SECS = ['s2', 's3', 's4', 's5', 's7', 's8'];   // sections the header range buttons drive (s6 is monthly, with its own 1Y–5Y buttons)
 // section controls: GC series and threshold for the GC-vs-IORB section, yield-or-price for the 2y/7y section
-const OPT = {gc: 'dtcc', th: 2, ust: 'bp', prS: null, prE: null, gRate: 'sofr', gMeas: 'd', gStart: 18, gPay: 25, gM: null, gY: null};   // prS/prE: assumed SOFR/EFFR for the unfixed days of the current month (null = carry the last fixing)
-try { Object.assign(OPT, JSON.parse(localStorage.getItem('fmm_opt') || '{}')); } catch (e) {}   // per-section range: months, or a custom start date
+const OPT = {gc: 'dtcc', th: 2, ust: 'bp', prS: null, prE: null, gRate: 'sofr', gMeas: 'se', gStart: 18, gPay: 25, gM: null, gY: null};   // prS/prE: assumed SOFR/EFFR for the unfixed days of the current month (null = carry the last fixing)
+try { Object.assign(OPT, JSON.parse(localStorage.getItem('fmm_opt') || '{}')); } catch (e) {}
+if (!OPT.gV) { OPT.gMeas = 'se'; OPT.gV = 1; }   // GSE charts now default to rate − EFFR (immune to Fed moves)   // per-section range: months, or a custom start date
 let CUR = 's2';      // section whose card is currently being built
 const CACHE_FRESH_MS = 10 * 60 * 1000;
 
@@ -1058,7 +1059,8 @@ function drawSr1Tables() {
 // GSEs collect MBS principal and interest mid-month and lend it in repo until paying MBS holders on the 25th.
 // Window = fixing dates from the start day (default 18th) up to the day before the payment date, both rolled to a business day.
 const GSE_RATES = {sofr: 'SOFR', tgcr: 'TGCR', bgcr: 'BGCR'};
-const GSE_MEAS = {d: ['Δ vs week before', 'bp'], avg: ['Average rate in the window', '%'], se: ['Rate − EFFR in the window', 'bp'], dse: ['Δ (rate − EFFR) vs week before', 'bp'], si: ['Rate − IORB in the window', 'bp']};
+// rate − EFFR first: both move with the Fed, so rate changes (e.g. the June 2022 hike) drop out
+const GSE_MEAS = {se: ['Avg rate − EFFR in the window', 'bp'], dse: ['Δ (rate − EFFR) vs week before', 'bp'], si: ['Avg rate − IORB in the window', 'bp'], d: ['Δ vs week before (includes Fed moves)', 'bp'], avg: ['Average rate in the window', '%']};
 function stepAt(rows, d, k) { let lo = 0, hi = rows.length - 1, v = null; while (lo <= hi) { const m = (lo + hi) >> 1; if (rows[m].d <= d) { v = rows[m][k]; lo = m + 1; } else hi = m - 1; } return v; }
 function gseRows() {
   const R = (DATA[OPT.gRate] || []).filter(r => isFinite(r.rate)); if (!R.length) return [];
