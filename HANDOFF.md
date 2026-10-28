@@ -5,6 +5,13 @@
 
 `cors-proxy-worker.js` is a Cloudflare Worker CORS proxy (allowlisted hosts only). The user has deployed it; its URL is baked into `PROXY_BASE` at the top of the HTML (`?url=` style). The FRED key is in `FRED_API_KEY` in the same block. Both can be overridden from the in-page Settings panel (saved to localStorage).
 
+## Analysis view (`#analysis`, header switch)
+Sections with `view: 'analysis'` render into `#analysispage` (same card, range and control machinery as the dashboard).
+- **10 · GSE cash week** (`gseRows()`): for each month, the window is the fixing dates from `OPT.gStart` (18th) up to the day before `OPT.gPay` (25th), both rolled forward to a business day. The baseline is the 5 fixings before the window. Per month it computes: average rate, Δ vs the week before, EFFR average, rate − EFFR (window and week before) and its Δ, and rate − IORB. Controls: rate (SOFR/TGCR/BGCR), measure, month (chart by year), year (chart by month), window days. A year × month heat grid and a table of every month sit below.
+- **11 · Bills vs SOFR**: FRED DGS1MO/DGS3MO (Treasury curve '1 Mo'/'3 Mo' fallback) × 360/365 to a money-market basis, minus SOFR.
+- **12 · Primary dealers**: NY Fed `/api/pd/get/<key>.json` returns the full history across series breaks (from 2013). Keys are in `PD_KEYS` (net positions by maturity, Treasury repo/reverse repo, $mn → $bn). Note the July 2024 series break.
+- Table view gains 1m/3m bill and dealer bases, plus bill − SOFR/RRP spreads.
+
 ## Daily snapshot (GitHub Actions + Pages)
 - `.github/workflows/daily-data.yml` runs on weekdays at ~9:17am and ~5:47pm New York, on "Run workflow", and on pushes to main that touch the page or scripts.
 - `scripts/build-data.mjs` runs the page's own `<script id="data-layer">` block in Node (via `new Function`, with the UI hooks stubbed). It fetches every source directly (no proxy needed on a server, FRED key from the `FRED_API_KEY` secret) and writes `_site/data/latest.json` = `{generated, today, start, failed, series: {id: {label, state, n, latest, src, fb, note, built, data}}}`. The site is deployed to Pages from that artifact, so nothing is committed daily except the DTCC archive.
