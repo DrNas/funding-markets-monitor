@@ -115,7 +115,8 @@ footer{margin-top:30px;color:var(--muted);font-size:11.5px}
 </header>
 <main>
   <div id="settings">
-    <label>FRED API key <input id="in-key" type="text" autocomplete="off" spellcheck="false"></label>
+    <label>Data <select id="in-src"><option value="snapshot">Daily snapshot (built on GitHub, fast)</option><option value="live">Live from each source (needs FRED key + proxy)</option></select></label><br>
+    <label>FRED API key <input id="in-key" type="text" autocomplete="off" spellcheck="false" placeholder="live mode only"></label>
     <label>PROXY_BASE <input id="in-proxy" type="text" placeholder="e.g. https://my-proxy.example.com/?url=" spellcheck="false"></label>
     <button id="save">Save &amp; reload data</button> <button id="clearcache">Clear cache</button>
     <div class="muted" style="margin-top:6px">If the proxy prefix ends in <code>?</code>, <code>=</code> or contains <code>?</code>, the full target URL is percent-encoded and appended; otherwise it is appended raw. Settings are stored in this browser's localStorage only.</div>
@@ -144,15 +145,16 @@ footer{margin-top:30px;color:var(--muted);font-size:11.5px}
   <footer>All data is fetched live in your browser from NY Fed, FRED, Treasury FiscalData, TreasuryDirect and OFR; nothing is interpolated or invented. Missing series show "no data – see status". GCF series are preliminary. Net issuance is an estimate built from public auction and holdings data (see notes under each chart).</footer>
 </main>
 
-<script>
+<!-- Data layer: fetching, parsing and derived series. No DOM access, so scripts/build-data.mjs runs this same block in Node for the daily snapshot. -->
+<script id="data-layer">
 /* ============================ CONFIG ============================ */
-const FRED_API_KEY = "e7482280d903251793be8ef678d3b6d0";
+const FRED_API_KEY = "";   // only needed for "Live from sources" mode; paste it in Settings (the daily snapshot uses a GitHub secret)
 const PROXY_BASE   = "https://black-bush-e1a3.mnsbafna.workers.dev/?url=";   // CORS proxy prefix; FRED/TreasuryDirect go through it, other hosts only if the browser blocks them
 /* ================================================================ */
 
 /* ---------- settings (localStorage, guarded) ---------- */
-const CFG = {key: FRED_API_KEY, proxy: PROXY_BASE};
-try { const s = JSON.parse(localStorage.getItem('fmm_cfg') || 'null'); if (s) { if (s.key) CFG.key = s.key; if (typeof s.proxy === 'string') CFG.proxy = s.proxy; } } catch (e) {}
+const CFG = {key: FRED_API_KEY, proxy: PROXY_BASE, src: 'snapshot'};   // src: 'snapshot' (daily file built on GitHub) or 'live'
+try { const s = JSON.parse(localStorage.getItem('fmm_cfg') || 'null'); if (s) { if (s.key) CFG.key = s.key; if (typeof s.proxy === 'string') CFG.proxy = s.proxy; if (s.src) CFG.src = s.src; } } catch (e) {}
 
 /* ---------- helpers ---------- */
 // strict finite check: cached JSON turns NaN into null, and the global isFinite(null) is true
@@ -461,6 +463,8 @@ function loadAll(force) {
   P.dgs7 = fred('dgs7', 'UST 7y yield', 'DGS7', START, 1, [{name: 'Treasury yield curve', run: () => ycCol('7 Yr')}]);
 }
 
+</script>
+<script>
 /* ---------- minimal UTC date adapter for Chart.js time scales (no external adapter needed) ---------- */
 (function () {
   const U = t => { const d = new Date(t); return [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()]; };
@@ -497,6 +501,7 @@ function loadAll(force) {
 
 /* ---------- chart plumbing ---------- */
 const CHARTS = {}, XH = {};
+let SNAP = null, SNAP_ERR = '';   // the daily snapshot in use, or why it could not be used
 Chart.defaults.color = '#8b949e';
 Chart.defaults.font.size = 11;
 Chart.defaults.animation = false;
@@ -1165,8 +1170,10 @@ function renderStrip() {
       nh += `<div class="${s.state === 'BLOCKED' || s.state === 'FAILED' ? 'bad' : 'warn'}"><b>${esc(s.label)}</b>: ${esc(s.note)}</div>`;
     else if (s.state === 'OK' && s.note && /^[A-Z]+-|derived|implied/.test(s.note)) nh += `<div><b>${esc(s.label)}</b>: ${esc(s.note)}</div>`;
   }
+  if (SNAP_ERR) nh = `<div class="warn"><b>Daily snapshot unavailable</b> (${esc(SNAP_ERR)}): fetching live from each source instead.</div>` + nh;
   strip.innerHTML = h; notes.innerHTML = nh;
-  const ts = Object.values(STATUS).map(s => s.t).filter(Boolean); $('#lastref').textContent = ts.length ? 'last fetch ' + fmtTime(Math.max(...ts)) : '';
+  const ts = Object.values(STATUS).map(s => s.t).filter(Boolean);
+  $('#lastref').textContent = SNAP ? 'snapshot ' + new Date(SNAP.generated).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : ts.length ? 'last fetch ' + fmtTime(Math.max(...ts)) : '';
 }
 
 /* ---------- UI wiring ---------- */
@@ -1202,13 +1209,13 @@ $('#sections').addEventListener('change', e => {
   if (Number.isFinite(v)) setOpt(i.closest('.ctl').dataset.sec, k, v); else if (k !== 'th') setOpt(i.closest('.ctl').dataset.sec, k, null);   // blank projection = carry the last fixing
 });
 $('#sections').addEventListener('click', e => { const tr = e.target.closest('#sr1-table tr[data-ym]'); if (tr) { SR1_SEL = tr.dataset.ym; drawSr1Tables(); } });
-$('#refresh').onclick = () => { buildDOM(); loadAll(true); };
+$('#refresh').onclick = () => { buildDOM(); loadData(true); };
 $('#setbtn').onclick = () => $('#settings').classList.toggle('open');
-$('#in-key').value = CFG.key; $('#in-proxy').value = CFG.proxy;
+$('#in-key').value = CFG.key; $('#in-proxy').value = CFG.proxy; $('#in-src').value = CFG.src;
 $('#save').onclick = () => {
-  CFG.key = $('#in-key').value.trim() || FRED_API_KEY; CFG.proxy = $('#in-proxy').value.trim();
+  CFG.key = $('#in-key').value.trim() || FRED_API_KEY; CFG.proxy = $('#in-proxy').value.trim(); CFG.src = $('#in-src').value;
   try { localStorage.setItem('fmm_cfg', JSON.stringify(CFG)); } catch (e) {}
-  buildDOM(); loadAll(true);
+  buildDOM(); loadData(true);
 };
 $('#clearcache').onclick = () => { try { Object.keys(localStorage).filter(k => k.startsWith('fmm2:')).forEach(k => localStorage.removeItem(k)); } catch (e) {} $('#lastref').textContent = 'cache cleared'; };
 
@@ -1362,9 +1369,33 @@ TP.addEventListener('click', e => {
 { const rate = Object.keys(BASES).filter(c => BASES[c].u === '%'), opts = rate.map(c => `<option value="${c}">${BASES[c].s} — ${esc(BASES[c].n)}</option>`).join('');
   $('#t-ca').innerHTML = opts; $('#t-cb').innerHTML = opts; $('#t-ca').value = 'GCO'; $('#t-cb').value = 'IORB'; }
 
+/* ---------- daily snapshot (built by .github/workflows/daily-data.yml, falls back to live fetching) ---------- */
+const SNAPSHOT_URL = 'https://drnas.github.io/funding-markets-monitor/data/latest.json';
+const SNAPSHOT_MAX_AGE_D = 4;   // an older snapshot means the daily job is broken: fetch live instead
+async function applySnapshot() {
+  const j = await fetchOnce(SNAPSHOT_URL + '?t=' + Date.now(), {retries: 1, timeout: 30000});
+  const gen = Date.parse(j && j.generated); if (!j || !j.series || !isFinite(gen)) throw new Error('snapshot file is not valid');
+  if (Date.now() - gen > SNAPSHOT_MAX_AGE_D * 864e5) throw new Error(`snapshot is ${Math.round((Date.now() - gen) / 864e5)} days old`);
+  for (const k of Object.keys(DATA)) delete DATA[k];
+  for (const k of Object.keys(STATUS)) delete STATUS[k];
+  for (const [id, s] of Object.entries(j.series)) {
+    DATA[id] = s.data;
+    STATUS[id] = {id, label: s.label || id, state: s.state, n: s.n, latest: s.latest, src: s.src, fb: s.fb, t: gen, note: s.note || ''};
+  }
+  SNAP = j; renderStrip(); renderFor(null);
+}
+async function loadData(force) {
+  SNAP = null; SNAP_ERR = '';
+  if (CFG.src !== 'live') {
+    try { return await applySnapshot(); }
+    catch (e) { SNAP_ERR = e.message || String(e); console.warn('daily snapshot unavailable, fetching live:', SNAP_ERR); }
+  }
+  loadAll(force);
+}
+
 buildDOM();
 setView();
-loadAll(false);
+loadData(false);
 </script>
 </body>
 </html>

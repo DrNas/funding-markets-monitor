@@ -1,0 +1,54 @@
+name: Daily data
+
+on:
+  schedule:
+    - cron: '17 13 * * 1-5'   # ~9:17am New York (8:17 in winter): after NY Fed publishes SOFR/EFFR (~8:00)
+    - cron: '47 21 * * 1-5'   # ~5:47pm New York: picks up Treasury yields and late updates
+  workflow_dispatch:           # "Run workflow" button on the Actions tab
+  push:
+    branches: [main]
+    paths: ['index.html', 'scripts/**', '.github/workflows/daily-data.yml']
+
+permissions:
+  contents: write   # commit the DTCC archive
+  pages: write
+  id-token: write
+
+concurrency:
+  group: daily-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch every source and build the snapshot
+        id: build
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          TZ: America/New_York
+        run: node scripts/build-data.mjs
+      - name: Commit the DTCC archive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/dtcc-gcf-history.csv
+          git diff --cached --quiet || { git commit -m "Update DTCC GCF archive" && git pull --rebase && git push; }
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
+      - name: Flag series that failed today
+        if: steps.build.outputs.failed != ''
+        run: |
+          echo "::error::Failed today (the previous copy was kept if there was one): ${{ steps.build.outputs.failed }}"
+          exit 1

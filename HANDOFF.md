@@ -1,11 +1,18 @@
 # Funding Markets Monitor — handoff
 
 ## What this is
-`funding-markets-monitor.html` is a single self-contained HTML dashboard (Chart.js 4.4.1 from cdnjs, a small inline UTC date adapter, no backend). It fetches live data in the browser on every open and renders five sections. It is opened locally, not published as a hosted page (hosted pages block the external API calls). Nothing is hard-coded or interpolated: a chart with no data shows "no data – see status".
+`index.html` (formerly `funding-markets-monitor.html`) is a single self-contained HTML dashboard (Chart.js 4.4.1 from cdnjs, a small inline UTC date adapter, no backend). It fetches live data in the browser on every open and renders five sections. It is opened locally, not published as a hosted page (hosted pages block the external API calls). Nothing is hard-coded or interpolated: a chart with no data shows "no data – see status".
 
 `cors-proxy-worker.js` is a Cloudflare Worker CORS proxy (allowlisted hosts only). The user has deployed it; its URL is baked into `PROXY_BASE` at the top of the HTML (`?url=` style). The FRED key is in `FRED_API_KEY` in the same block. Both can be overridden from the in-page Settings panel (saved to localStorage).
 
-## Sections
+## Daily snapshot (GitHub Actions + Pages)
+- `.github/workflows/daily-data.yml` runs on weekdays at ~9:17am and ~5:47pm New York, on "Run workflow", and on pushes to main that touch the page or scripts.
+- `scripts/build-data.mjs` runs the page's own `<script id="data-layer">` block in Node (via `new Function`, with the UI hooks stubbed). It fetches every source directly (no proxy needed on a server, FRED key from the `FRED_API_KEY` secret) and writes `_site/data/latest.json` = `{generated, today, start, failed, series: {id: {label, state, n, latest, src, fb, note, built, data}}}`. The site is deployed to Pages from that artifact, so nothing is committed daily except the DTCC archive.
+- If a series fails, the previous snapshot's copy is kept (state CACHED), and the job ends red so GitHub emails the owner. If SOFR or EFFR is missing, nothing is published.
+- `data/dtcc-gcf-history.csv` archives every DTCC GCF day seen (DTCC publishes only ~12 months), merged into the snapshot.
+- The page loads `SNAPSHOT_URL` first (Settings > Data = Daily snapshot, the default). It falls back to live fetching if the file is missing or older than `SNAPSHOT_MAX_AGE_D` (4 days). "Live from each source" mode needs the FRED key pasted in Settings. The key is no longer in the HTML.
+- Keep the data layer free of DOM access (`document`, `getComputedStyle`, Chart) at top level, or the build breaks.
+
 1. **Net issuance** (settlement-date bars for 50 days, monthly bars, table of announced auctions)
 2. **Overnight rates vs the corridor** (SOFR/TGCR/EFFR vs SRF-top, IORB, RRP; SOFR percentile bands; DTCC GCF Treasury index)
 3. **Spreads** (3x3: SOFR-RRP, SOFR-IORB, EFFR-IORB, SOFR-EFFR with 7d/30d calendar-day averages, TGCR-RRP, TGCR-SOFR, BGCR-TGCR, GCF-SOFR (OFR + implied), DTCC GCF Treasury-SOFR)
