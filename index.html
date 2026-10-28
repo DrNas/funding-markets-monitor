@@ -314,6 +314,7 @@ function sumOps(j, filter) {
   return Object.keys(m).sort().map(d => ({d, v: m[d] / 1e9}));
 }
 async function fredRows(series, start, scale) {
+  if (!CFG.key) { const e = new Error('no FRED API key set (Settings → FRED API key; only needed in live mode)'); e.kind = 'empty'; throw e; }
   const u = `https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${encodeURIComponent(CFG.key)}&file_type=json&observation_start=${start}`;
   const j = await fetchJSON(u);
   const a = (j.observations || []).filter(o => o.value !== '.' && isFinite(parseFloat(o.value))).map(o => ({d: o.date, v: parseFloat(o.value) * (scale || 1)}));
@@ -1370,10 +1371,17 @@ TP.addEventListener('click', e => {
   $('#t-ca').innerHTML = opts; $('#t-cb').innerHTML = opts; $('#t-ca').value = 'GCO'; $('#t-cb').value = 'IORB'; }
 
 /* ---------- daily snapshot (built by .github/workflows/daily-data.yml, falls back to live fetching) ---------- */
-const SNAPSHOT_URL = 'https://drnas.github.io/funding-markets-monitor/data/latest.json';
+// Hosted: the site's own copy (works on any domain). Opened as a local file: the published copies, custom domain first.
+const SNAPSHOT_URLS = (/^https?:$/.test(location.protocol) ? [new URL('data/latest.json', location.href).href] : [])
+  .concat(['https://funding.manasbafna.com/data/latest.json', 'https://drnas.github.io/funding-markets-monitor/data/latest.json']);
 const SNAPSHOT_MAX_AGE_D = 4;   // an older snapshot means the daily job is broken: fetch live instead
 async function applySnapshot() {
-  const j = await fetchOnce(SNAPSHOT_URL + '?t=' + Date.now(), {retries: 1, timeout: 30000});
+  let j = null; const errs = [];
+  for (const u of [...new Set(SNAPSHOT_URLS)]) {
+    try { j = await fetchOnce(u + '?t=' + Date.now(), {retries: 0, timeout: 20000}); break; }
+    catch (e) { errs.push(`${new URL(u).host}: ${e.message || e}`); }
+  }
+  if (!j) throw new Error(errs.join('; '));
   const gen = Date.parse(j && j.generated); if (!j || !j.series || !isFinite(gen)) throw new Error('snapshot file is not valid');
   if (Date.now() - gen > SNAPSHOT_MAX_AGE_D * 864e5) throw new Error(`snapshot is ${Math.round((Date.now() - gen) / 864e5)} days old`);
   for (const k of Object.keys(DATA)) delete DATA[k];
