@@ -53,11 +53,13 @@ export async function build({fetchImpl = fetch, fredKey = '', prev = null, archi
   return {snapshot: {generated, today: api.TODAY, start: api.START, failed, series}, archiveCsv: rows.length ? toArchive(rows) : archiveCsv};
 }
 
+const api_note = s => s ? s.note : '';
+
 async function main() {
   let prev = null;
   try { const r = await fetch(PAGES_URL + 'data/latest.json?t=' + Date.now()); if (r.ok) prev = await r.json(); } catch (e) {}
   console.log(prev ? `previous snapshot: ${prev.generated}` : 'no previous snapshot (first run?)');
-  if (!process.env.FRED_API_KEY) console.warn('FRED_API_KEY is not set: FRED series will fail (add it under Settings > Secrets and variables > Actions)');
+  if (!process.env.FRED_API_KEY) console.log('::warning::FRED_API_KEY secret is not set (or empty): FRED series will fail. Add it under Settings > Secrets and variables > Actions.');
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const archiveCsv = fs.existsSync(ARCHIVE) ? fs.readFileSync(ARCHIVE, 'utf8') : '';
   const {snapshot, archiveCsv: newCsv} = await build({fredKey: process.env.FRED_API_KEY || '', prev, archiveCsv, html});
@@ -78,6 +80,8 @@ async function main() {
   fs.writeFileSync(ARCHIVE, newCsv);
   fs.copyFileSync(ARCHIVE, path.join(site, 'data/dtcc-gcf-history.csv'));
   if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `failed=${snapshot.failed.join(' ')}\n`);
+  // one annotation per failed series, so the reason shows on the run page without opening the log
+  for (const id of snapshot.failed) console.log(`::error title=${id} failed::${(api_note(snapshot.series[id]) || 'no detail').replace(/\r?\n/g, ' ').slice(0, 400)}`);
   console.log(`wrote _site/data/latest.json (${(fs.statSync(path.join(site, 'data/latest.json')).size / 1e6).toFixed(1)} MB); failed today: ${snapshot.failed.join(', ') || 'none'}`);
 }
 
