@@ -1327,13 +1327,13 @@ function drawMeTables() {
 
 /* ---------- Today summary (top of the dashboard) ---------- */
 const TODAY_BOXES = [
-  ['Overnight rates', '%', ['L:SFR', 'L:TG', 'L:BG', 'L:EFFR', 'L:GCO', 'L:GCOMBS', 'L:DVP', 'L:IORB', 'L:RRP', 'L:SRF']],
+  ['Overnight rates', '%', ['L:SFR', 'L:TG', 'L:BG', 'L:EFFR', 'L:GCO', 'L:DVP', 'L:IORB', 'L:RRP', 'L:SRF']],
   ['Spreads', 'bp', ['S:SFR:IORB', 'S:SFR:EFFR', 'S:SFR:RRP', 'S:TG:RRP', 'S:GCO:SFR', 'S:DVP:SFR', 'S:SFR99:SFR', 'S:SFR75:SFR25']],
   ['Liquidity', '$bn', ['L:RES', 'L:RRPVOL', 'L:TGA', 'L:SRFVOL', 'L:SFRVOL', 'L:PDNET']],
   ['Bills and Treasuries', '', ['S:BILL1M:SFR', 'S:BILL3M:SFR', 'L:UST2', 'L:UST7']]
 ];
 const WEEKLY = new Set(['RES', 'PDNET', 'PDREPO', 'PDRREPO', 'SOMA']);
-const TODAY_LABELS = {'L:GCO': 'DTCC GCF Tsy', 'L:GCOMBS': 'DTCC GCF MBS'};   // clearer names than the Table-view codes
+const TODAY_LABELS = {'L:GCO': 'DTCC GCF Tsy'};   // clearer names than the Table-view codes
 function todayStat(id) {   // latest value, change since the previous print and since a week earlier, on the series' own dates
   TM = {}; const m = metric(id); if (!m) return null; const [, a, b] = id.split(':'), lead = BASES[a].step && b ? BASES[b] : BASES[a];
   const ds = (DATA[lead.id] || []).filter(r => isFinite(r[lead.k])).map(r => r.d); let i = ds.length - 1;
@@ -1357,7 +1357,7 @@ function drawToday() {
   const box = $('#today'); if (!box) return;
   if (!Object.keys(STATUS).length) { box.innerHTML = '<div class="muted" style="padding:8px">loading…</div>'; return; }
   const sofrD = (DATA.sofr || []).length ? DATA.sofr[DATA.sofr.length - 1].d : '';
-  const fv = (u, v, code) => u === '%' ? v.toFixed(code === 'GCO' || code === 'GCOMBS' ? 3 : 2) : u === 'bp' ? v.toFixed(1) : v >= 1000 ? v.toFixed(0) : v.toFixed(1);
+  const fv = (u, v, code) => u === '%' ? v.toFixed(code === 'GCO' ? 3 : 2) : u === 'bp' ? v.toFixed(1) : v >= 1000 ? v.toFixed(0) : v.toFixed(1);
   const fd = (u, v) => v == null ? '<span class="muted">—</span>' : `<span class="${Math.abs(v) < 0.05 ? 'muted' : ''}">${sgn(v, u === 'bn' && Math.abs(v) >= 100 ? 0 : 1)}</span>`;
   let h = '';
   for (const [title, unit, ids] of TODAY_BOXES) {
