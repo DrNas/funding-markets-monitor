@@ -266,8 +266,10 @@ const describe = e => e.kind === 'network' ? 'BLOCKED (CORS/network): the browse
   e.kind === 'timeout' ? 'timeout' : e.kind === 'http' ? e.message : e.kind === 'empty' ? (e.message || 'no rows') : (e.message || String(e));
 
 /* load(id,label,sources): sources = [{name, run:async()=>({data,n,latest,note?})}] tried in order */
+let PRESET = null;   // live mode in a browser: id -> series taken from the daily snapshot instead of fetched (sources a browser can't reach)
 async function load(id, label, sources, force) {
   const S = STATUS[id] = {id, label, state: 'loading', n: 0, latest: '', note: '', t: null};
+  if (PRESET && PRESET[id]) { const p = PRESET[id]; DATA[id] = p.data; Object.assign(S, {state: 'OK', n: p.n, latest: p.latest, t: p.t, src: 'daily snapshot', note: p.note}); return done(id); }
   renderStrip();
   const c = cget(id);
   if (!force && c && Date.now() - c.t < CACHE_FRESH_MS) {
@@ -410,7 +412,7 @@ function loadAll(force) {
       Object.assign(all, parseYC(await fetchJSON(`${TSYYC}/${y}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${y}&page&_format=csv`, {text: true})));
     return all;
   })();
-  const ycCol = async (col, scale) => { const all = await tsyYC(); return rowsRes(Object.keys(all).sort().filter(d => d >= START && isFinite(all[d][col])).map(d => ({d, v: all[d][col] * (scale || 1)})), {note: 'Treasury daily par yield curve, column ' + col}); };
+  const ycCol = async (col, scale) => { const all = await tsyYC(); return rowsRes(Object.keys(all).sort().filter(d => d >= START && isFinite(all[d][col])).map(d => ({d, v: all[d][col] * (scale || 1)})), {note: `Treasury daily par yield curve, "${col}" (the same data as FRED)`}); };
   const gdpStart = addDays(START, -120);
   const fred = (id, label, series, start, scale, fallbackSrc) => load(id, label, [{name: 'FRED', run: () => fredRows(series, start, scale)}].concat(fallbackSrc || []), force);
   P.sofr = load('sofr', 'SOFR', [{name: 'NY Fed', run: () => nyfRate('secured/sofr')}], force);
@@ -439,17 +441,19 @@ function loadAll(force) {
     return {data: {asOf: asOf.asOfDate, map}, n, latest: asOf.asOfDate};
   }}], force);
   P.iorb = fred('iorb', 'IORB', 'IORB', START, 1);
-  P.dfedtarl = fred('dfedtarl', 'DFEDTARL (RRP/floor)', 'DFEDTARL', START, 1, [{name: 'NY Fed EFFR target range', run: async () => {
-    await P.effr; const e = DATA.effr || []; const a = e.filter(r => isFinite(r.tf)).map(r => ({d: r.d, v: r.tf})); return rowsRes(a, {note: 'derived from EFFR targetRateFrom'});
-  }}]);
-  P.dfedtaru = fred('dfedtaru', 'DFEDTARU (SRF/top)', 'DFEDTARU', START, 1, [{name: 'NY Fed EFFR target range', run: async () => {
-    await P.effr; const e = DATA.effr || []; const a = e.filter(r => isFinite(r.tt)).map(r => ({d: r.d, v: r.tt})); return rowsRes(a, {note: 'derived from EFFR targetRateTo'});
-  }}]);
+  // Sources that work from both a browser and the daily build come first; FRED (blocked from some Cloudflare locations) is the backup
+  const fredSrc = (series, start, scale) => ({name: 'FRED', run: () => fredRows(series, start, scale)});
+  P.dfedtarl = load('dfedtarl', 'RRP rate (bottom of range)', [{name: 'NY Fed EFFR target range', run: async () => {
+    await P.effr; const e = DATA.effr || []; const a = e.filter(r => isFinite(r.tf)).map(r => ({d: r.d, v: r.tf})); return rowsRes(a, {note: 'from the NY Fed EFFR target range (same as FRED DFEDTARL)'});
+  }}, fredSrc('DFEDTARL', START, 1)], force);
+  P.dfedtaru = load('dfedtaru', 'SRF rate (top of range)', [{name: 'NY Fed EFFR target range', run: async () => {
+    await P.effr; const e = DATA.effr || []; const a = e.filter(r => isFinite(r.tt)).map(r => ({d: r.d, v: r.tt})); return rowsRes(a, {note: 'from the NY Fed EFFR target range (same as FRED DFEDTARU)'});
+  }}, fredSrc('DFEDTARU', START, 1)], force);
   P.wresbal = fred('wresbal', 'WRESBAL', 'WRESBAL', START, 1 / 1000);      // FRED reports $ millions -> $ bn
   P.gdp = fred('gdp', 'GDP', 'GDP', gdpStart, 1);                          // $ bn SAAR
-  P.rrponts = fred('rrponts', 'RRPONTSYD', 'RRPONTSYD', START, 1, [{name: 'NY Fed RRP ops', run: async () => {
-    await P.rrp; const a = DATA.rrp || []; return rowsRes(a.slice(), {note: 'same quantity, from NY Fed ON RRP operations'});
-  }}]);
+  P.rrponts = load('rrponts', 'ON RRP take-up', [{name: 'NY Fed RRP ops', run: async () => {
+    await P.rrp; const a = DATA.rrp || []; return rowsRes(a.slice(), {note: 'from NY Fed ON RRP operations (same as FRED RRPONTSYD)'});
+  }}, fredSrc('RRPONTSYD', START, 1)], force);
   P.tga = load('tga', 'TGA closing balance', [{name: 'FiscalData', run: async () => {
     const f = `record_date:gte:${START},account_type:eq:${encodeURIComponent('Treasury General Account (TGA) Closing Balance')}`;
     const j = await fetchJSON(`${FD}/accounting/dts/operating_cash_balance?filter=${f}&fields=record_date,account_type,open_today_bal,close_today_bal&sort=record_date&page[size]=10000`);
@@ -490,11 +494,13 @@ function loadAll(force) {
     const j = await fetchJSON(`${FD}/debt/mspd/mspd_table_1?filter=record_date:gte:${HSTART}&sort=record_date&page[size]=10000`, {timeout: 40000});
     return rowsRes(mspdNet(j.data || []));
   }}], force);
-  P.dgs2 = fred('dgs2', 'UST 2y yield', 'DGS2', START, 1, [{name: 'Treasury yield curve', run: () => ycCol('2 Yr')}]);
-  P.dgs7 = fred('dgs7', 'UST 7y yield', 'DGS7', START, 1, [{name: 'Treasury yield curve', run: () => ycCol('7 Yr')}]);
+  // Treasury's daily par yield curve is the source FRED's DGS series copy
+  const ust = (id, label, col, series, scale) => load(id, label, [{name: 'Treasury yield curve', run: () => ycCol(col, scale)}, fredSrc(series, START, scale)], force);
+  P.dgs2 = ust('dgs2', 'UST 2y yield', '2 Yr', 'DGS2', 1);
+  P.dgs7 = ust('dgs7', 'UST 7y yield', '7 Yr', 'DGS7', 1);
   // bill yields are published on a bond-equivalent (365-day) basis; × 360/365 puts them on SOFR's money-market basis
-  P.dgs1m = fred('dgs1m', '1m bill (money-market basis)', 'DGS1MO', START, MM, [{name: 'Treasury yield curve', run: () => ycCol('1 Mo', MM)}]);
-  P.dgs3m = fred('dgs3m', '3m bill (money-market basis)', 'DGS3MO', START, MM, [{name: 'Treasury yield curve', run: () => ycCol('3 Mo', MM)}]);
+  P.dgs1m = ust('dgs1m', '1m bill (money-market basis)', '1 Mo', 'DGS1MO', MM);
+  P.dgs3m = ust('dgs3m', '3m bill (money-market basis)', '3 Mo', 'DGS3MO', MM);
   P.dvp = load('dvp', 'DVP repo (OFR, prelim)', [{name: 'OFR', run: async () => {
     const [r, v] = await Promise.all(['REPO-DVP_AR_OO-P', 'REPO-DVP_TV_OO-P'].map(m => fetchJSON(`${OFR}/series/timeseries?mnemonic=${m}&start_date=${START}`)));
     const vm = new Map((v || []).filter(x => x[1] != null).map(x => [x[0], x[1] / 1e9]));
@@ -1776,7 +1782,12 @@ TP.addEventListener('click', e => {
 // Hosted: the site's own copy (works on any domain). Opened as a local file: the published copies, custom domain first.
 const SNAPSHOT_URLS = (/^https?:$/.test(location.protocol) ? [new URL('data/latest.json', location.href).href] : [])
   .concat(['https://funding.manasbafna.com/data/latest.json', 'https://drnas.github.io/funding-markets-monitor/data/latest.json']);
-const SNAPSHOT_MAX_AGE_D = 4;   // an older snapshot means the daily job is broken: fetch live instead
+const SNAPSHOT_MAX_AGE_D = 4;
+// In live mode these come straight from the daily snapshot: FRED blocks some Cloudflare locations (no other live source for these),
+// and TreasuryDirect rejects requests through Cloudflare (FiscalData misses announced-but-not-yet-held auctions)
+const SNAPSHOT_FIRST = ['iorb', 'wresbal', 'gdp', 'h41', 'td_upcoming', 'td_out'];
+const SNAPSHOT_FIRST_WHY = {iorb: 'FRED only, and FRED blocks requests through Cloudflare', wresbal: 'FRED only, weekly', gdp: 'FRED only, quarterly', h41: 'FRED only, weekly',
+  td_upcoming: 'TreasuryDirect rejects requests through Cloudflare', td_out: 'TreasuryDirect rejects requests through Cloudflare'};   // an older snapshot means the daily job is broken: fetch live instead
 async function fetchSnapshot() {
   let j = null; const errs = [];
   for (const u of [...new Set(SNAPSHOT_URLS)]) {
@@ -1807,20 +1818,20 @@ async function loadData(force) {
   // Live: fetch every source, and fill any series that can't be fetched from here (e.g. FRED blocking this
   // Cloudflare location) from today's daily snapshot instead of an older browser cache
   const snapP = fetchSnapshot().catch(() => null);
-  loadAll(force);
-  await Promise.allSettled(Object.values(P));
-  const j = await snapP; if (!j) return;
-  const filled = [];
-  for (const [id, S] of Object.entries(STATUS)) {
-    const sn = j.series[id];
-    if (!sn || !sn.data || !['CACHED', 'FAILED', 'BLOCKED', 'EMPTY'].includes(S.state)) continue;
+  const pre = await Promise.race([snapP, sleep(8000).then(() => null)]);
+  PRESET = pre ? Object.fromEntries(SNAPSHOT_FIRST.filter(id => pre.series[id] && pre.series[id].data).map(id => { const x = pre.series[id];
+    return [id, {data: x.data, n: x.n, latest: x.latest, t: Date.parse(pre.generated), note: `from today's daily build (${new Date(pre.generated).toLocaleString()}): ${SNAPSHOT_FIRST_WHY[id] || 'not reachable from a browser'}`}]; })) : null;
+  loadAll(force); PRESET = null;   // load() reads the preset synchronously, before its first await
+  // as soon as any series' live fetch fails, show the snapshot's copy instead of waiting for the slowest source
+  for (const [id, pr] of Object.entries(P)) pr.then(async () => {
+    const S = STATUS[id], j = await snapP; if (!j || !S || !['CACHED', 'FAILED', 'BLOCKED', 'EMPTY'].includes(S.state)) return;
+    const sn = j.series[id]; if (!sn || !sn.data) return;
     const why = S.state === 'CACHED' ? S.note.replace(/^live fetch failed \((.*)\); showing cached copy.*$/, '$1') : S.note;
     DATA[id] = sn.data;
     Object.assign(S, {state: 'OK', fb: true, n: sn.n, latest: sn.latest, t: Date.parse(j.generated),
       note: `live fetch failed (${why}); using the daily snapshot built ${new Date(j.generated).toLocaleString()}`});
-    filled.push(id);
-  }
-  if (filled.length) { renderStrip(); renderFor(filled); }
+    renderStrip(); renderFor([id]);
+  });
 }
 
 // the status panel remembers whether it was left open
