@@ -1,8 +1,9 @@
-FRED direct, browser UA: 200 server=Apache cf-ray=null
-  {"realtime_start":"2026-10-28","realtime_end":"2026-10-28","observation_start":"1600-01-01","observation_end":"9999-12-31","units":"lin","output_type":1,"file_type":"json","order_by":"observation_date","sort_order":"desc","count":1919,"offset":0,"limit":2,"observations":[{"realtime_start":"2026-10-2
-FRED via proxy: 200 server=cloudflare cf-ray=a52305d3e9e4d306-MCI
-  {"realtime_start":"2026-10-28","realtime_end":"2026-10-28","observation_start":"1600-01-01","observation_end":"9999-12-31","units":"lin","output_type":1,"file_type":"json","order_by":"observation_date","sort_order":"desc","count":1919,"offset":0,"limit":2,"observations":[{"realtime_start":"2026-10-2
-Treasury curve via proxy: 200 server=cloudflare cf-ray=a52306050f57d306-MCI
-  Date,"1 Mo","1.5 Month","2 Mo","3 Mo","4 Mo","6 Mo","1 Yr","2 Yr","3 Yr","5 Yr","7 Yr","10 Yr","20 Yr","30 Yr" 10/28/2026,4.07,4.10,4.16,4.18,4.22,4.32,4.47,4.67,4.80,4.85,4.95,5.05,5.41,5.37 10/27/2026,4.10,4.11,4.18,4.22,4.31,4.34,4.50,4.70,4.80,4.82,4.91,4.99,5.34,5.30 10/26/2026,4.11,4.13,4.18,4
-NY Fed via proxy (control): 200 server=cloudflare cf-ray=a5230607b825d313-MCI
-  { "refRates": [ { "effectiveDate": "2026-10-28", "type": "SOFR" ,"percentRate": 3.94 ,"percentPercentile1": 3.89 ,"percentPercentile25": 3.92 ,"percentPercentile75": 3.99 ,"percentPercentile99": 4.02 ,"volumeInBillions": 3074 ,"revisionIndicator": "" } ] }
+DTCC via proxy, ?t=: 200 acao=* ctype=text/csv bytes=13449
+  Date,MBS Total PAR Value,MBS Weighted Average,Treasury Total PAR Value,Treasury Weighted Average
+  last: 10/28/2026,144602000000,  3.970,55140000000,  3.954  || TRAILER,250,,,,,
+DTCC via proxy, plain: 200 acao=* ctype=text/csv bytes=13447
+  Date,MBS Total PAR Value,MBS Weighted Average,Treasury Total PAR Value,Treasury Weighted Average
+  last: 10/23/2026,104960000000,  3.950,71690000000,  3.936  || TRAILER,250,,,,,
+DTCC direct, ?t=: 200 acao=null ctype=text/csv bytes=13449
+  Date,MBS Total PAR Value,MBS Weighted Average,Treasury Total PAR Value,Treasury Weighted Average
+  last: 10/28/2026,144602000000,  3.970,55140000000,  3.954  || TRAILER,250,,,,,
