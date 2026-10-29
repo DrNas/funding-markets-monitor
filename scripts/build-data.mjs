@@ -77,6 +77,7 @@ async function main() {
   const site = path.join(ROOT, '_site');
   fs.mkdirSync(path.join(site, 'data'), {recursive: true});
   fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(site, 'index.html'));
+  for (const f of ['ads.txt']) if (fs.existsSync(path.join(ROOT, f))) fs.copyFileSync(path.join(ROOT, f), path.join(site, f));   // static files served from the site root
   fs.writeFileSync(path.join(site, 'data/latest.json'), JSON.stringify(snapshot));
   fs.mkdirSync(path.dirname(ARCHIVE), {recursive: true});
   fs.writeFileSync(ARCHIVE, newCsv);
