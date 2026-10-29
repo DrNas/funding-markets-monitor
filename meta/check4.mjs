@@ -1,12 +1,8 @@
-// one-off: what does the published snapshot contain?
+// one-off: what can the AdSense crawler see?
 const out = [];
-for (const base of ['https://funding.manasbafna.com/', 'https://drnas.github.io/funding-markets-monitor/']) {
-  try {
-    const r = await fetch(base + 'data/latest.json?t=' + Date.now()); out.push(`${base} -> ${r.status} final=${r.url}`);
-    if (!r.ok) continue; const j = await r.json();
-    out.push(`generated ${j.generated} failed=[${j.failed}]`);
-    for (const [id, s] of Object.entries(j.series)) out.push(`  ${id}: ${s.state} n=${s.n} latest=${s.latest} dataRows=${Array.isArray(s.data) ? s.data.length : typeof s.data} last=${Array.isArray(s.data) && s.data.length ? JSON.stringify(s.data[s.data.length - 1]).slice(0, 120) : ''}`);
-    break;
-  } catch (e) { out.push(base + ' ERR ' + e.message); }
+for (const u of ['https://funding.manasbafna.com/ads.txt', 'https://funding.manasbafna.com/', 'https://manasbafna.com/ads.txt', 'https://manasbafna.com/', 'https://www.manasbafna.com/', 'http://manasbafna.com/ads.txt']) {
+  try { const r = await fetch(u, {redirect: 'follow', headers: {'User-Agent': 'Mozilla/5.0 (compatible; Mediapartners-Google)'}}); const t = await r.text();
+    out.push(`${u} -> ${r.status} final=${r.url} bytes=${t.length} hasPub=${t.includes('2104381144893771')} server=${r.headers.get('server')}\n  ${t.slice(0, 160).replace(/\s+/g, ' ')}`); }
+  catch (e) { out.push(`${u} -> ERR ${e.cause ? e.cause.code || e.cause.message : e.message}`); }
 }
 (await import('node:fs')).writeFileSync('meta/check4.txt', out.join('\n') + '\n'); console.log(out.join('\n'));
