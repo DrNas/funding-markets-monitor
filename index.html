@@ -109,7 +109,7 @@ body:not(.aview) #analysispage{display:none}
 .tbox .ct{margin-bottom:2px}
 .mk-key{font-size:11px;color:var(--muted);display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
 .mk-key i{display:inline-block;width:12px;height:0;border-top:2px solid;vertical-align:middle;margin-right:3px}
-.adwrap{margin:10px 0 0}
+.adwrap{margin:16px 0 0}
 ins.adsbygoogle[data-ad-status="unfilled"]{display:none!important}   /* no ad: no empty gap */
 footer{margin-top:30px;color:var(--muted);font-size:11.5px}
 </style>
@@ -141,8 +141,6 @@ footer{margin-top:30px;color:var(--muted);font-size:11.5px}
     <div id="strip"></div>
     <div id="notes"></div>
   </details>
-  <!-- AdSense unit "Funding": kept outside #sections so rebuilding the page never reloads the ad -->
-  <div class="adwrap"><ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-2104381144893771" data-ad-slot="3508085800" data-ad-format="auto" data-full-width-responsive="true"></ins></div>
   <div id="sections"></div>
   <div id="analysispage"></div>
   <div id="tablepage">
@@ -163,6 +161,8 @@ footer{margin-top:30px;color:var(--muted);font-size:11.5px}
     </div>
   </div>
   <footer>All data is fetched live in your browser from NY Fed, FRED, Treasury FiscalData, TreasuryDirect and OFR; nothing is interpolated or invented. Missing series show "no data – see status". GCF series are preliminary. Net issuance is an estimate built from public auction and holdings data (see notes under each chart). For information only, not investment advice. · <a href="https://manasbafna.com/" style="color:inherit">manasbafna.com</a> · <a href="https://manasbafna.com/privacy.html" style="color:inherit">Privacy policy</a></footer>
+  <!-- AdSense unit "Funding", at the very bottom; outside #sections so rebuilding the page never reloads the ad -->
+  <div class="adwrap"><ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-2104381144893771" data-ad-slot="3508085800" data-ad-format="auto" data-full-width-responsive="true"></ins></div>
 </main>
 
 <!-- Data layer: fetching, parsing and derived series. No DOM access, so scripts/build-data.mjs runs this same block in Node for the daily snapshot. -->
@@ -1847,7 +1847,7 @@ $('#status').addEventListener('toggle', () => { try { localStorage.setItem('fmm_
 buildDOM();
 setView();
 loadData(false);
-try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}   // fill the one ad slot (no-op until AdSense approves the site)
+try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}   // fill the ad slot (no-op until AdSense approves the site)
 </script>
 </body>
 </html>
