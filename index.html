@@ -1777,7 +1777,7 @@ TP.addEventListener('click', e => {
 const SNAPSHOT_URLS = (/^https?:$/.test(location.protocol) ? [new URL('data/latest.json', location.href).href] : [])
   .concat(['https://funding.manasbafna.com/data/latest.json', 'https://drnas.github.io/funding-markets-monitor/data/latest.json']);
 const SNAPSHOT_MAX_AGE_D = 4;   // an older snapshot means the daily job is broken: fetch live instead
-async function applySnapshot() {
+async function fetchSnapshot() {
   let j = null; const errs = [];
   for (const u of [...new Set(SNAPSHOT_URLS)]) {
     try { j = await fetchOnce(u + '?t=' + Date.now(), {retries: 0, timeout: 20000}); break; }
@@ -1786,6 +1786,10 @@ async function applySnapshot() {
   if (!j) throw new Error(errs.join('; '));
   const gen = Date.parse(j && j.generated); if (!j || !j.series || !isFinite(gen)) throw new Error('snapshot file is not valid');
   if (Date.now() - gen > SNAPSHOT_MAX_AGE_D * 864e5) throw new Error(`snapshot is ${Math.round((Date.now() - gen) / 864e5)} days old`);
+  return j;
+}
+async function applySnapshot() {
+  const j = await fetchSnapshot(), gen = Date.parse(j.generated);
   for (const k of Object.keys(DATA)) delete DATA[k];
   for (const k of Object.keys(STATUS)) delete STATUS[k];
   for (const [id, s] of Object.entries(j.series)) {
@@ -1800,7 +1804,23 @@ async function loadData(force) {
     try { return await applySnapshot(); }
     catch (e) { SNAP_ERR = e.message || String(e); console.warn('daily snapshot unavailable, fetching live:', SNAP_ERR); }
   }
+  // Live: fetch every source, and fill any series that can't be fetched from here (e.g. FRED blocking this
+  // Cloudflare location) from today's daily snapshot instead of an older browser cache
+  const snapP = fetchSnapshot().catch(() => null);
   loadAll(force);
+  await Promise.allSettled(Object.values(P));
+  const j = await snapP; if (!j) return;
+  const filled = [];
+  for (const [id, S] of Object.entries(STATUS)) {
+    const sn = j.series[id];
+    if (!sn || !sn.data || !['CACHED', 'FAILED', 'BLOCKED', 'EMPTY'].includes(S.state)) continue;
+    const why = S.state === 'CACHED' ? S.note.replace(/^live fetch failed \((.*)\); showing cached copy.*$/, '$1') : S.note;
+    DATA[id] = sn.data;
+    Object.assign(S, {state: 'OK', fb: true, n: sn.n, latest: sn.latest, t: Date.parse(j.generated),
+      note: `live fetch failed (${why}); using the daily snapshot built ${new Date(j.generated).toLocaleString()}`});
+    filled.push(id);
+  }
+  if (filled.length) { renderStrip(); renderFor(filled); }
 }
 
 // the status panel remembers whether it was left open
