@@ -32,10 +32,6 @@ button:hover{background:#30363d}
 nav a{color:var(--muted);text-decoration:none;margin-right:8px;font-size:12px}
 nav a:hover{color:var(--text)}
 main{max-width:1560px;margin:0 auto;padding:12px 16px 60px}
-#settings{display:none;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:10px 0}
-#settings.open{display:block}
-#settings label{display:inline-block;margin:4px 14px 4px 0;color:var(--muted)}
-#settings input{width:min(430px,90vw);margin-left:6px}
 #strip{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 4px}
 .chip{border:1px solid var(--border);background:var(--card);border-radius:12px;padding:1px 9px;font-size:11.5px;white-space:nowrap}
 .chip b{font-weight:600}
@@ -123,19 +119,12 @@ footer{margin-top:30px;color:var(--muted);font-size:11.5px}
     <span class="sp"></span>
     <span class="muted hdrrange">all sections:</span><span class="seg hdrrange" id="range"><button data-m="3">3M</button><button data-m="6" class="on">6M</button><button data-m="12">1Y</button><button data-m="24">2Y</button></span>
     <label class="muted" title="Chart markers: Fed meetings (purple), tax dates (red dashed), mid-month coupon settlements (teal dotted), GSE cash windows (shaded), month-ends (grey), quarter-ends (amber)"><input type="checkbox" id="mk"> markers</label>
+    <span class="seg" id="src"><button data-v="live" title="Fetch every source now (falls back to the daily build for anything a browser can't reach)">Live</button><button data-v="snapshot" title="The daily build from GitHub: one fast download, refreshed several times each weekday">Cached</button></span>
     <button id="refresh">Refresh</button>
     <span class="muted" id="lastref"></span>
-    <button id="setbtn">Settings</button>
   </div>
 </header>
 <main>
-  <div id="settings">
-    <label>Data <select id="in-src"><option value="snapshot">Daily snapshot (built on GitHub, fast)</option><option value="live">Live from each source (needs FRED key + proxy)</option></select></label><br>
-    <label>FRED API key <input id="in-key" type="text" autocomplete="off" spellcheck="false" placeholder="live mode only"></label>
-    <label>PROXY_BASE <input id="in-proxy" type="text" placeholder="e.g. https://my-proxy.example.com/?url=" spellcheck="false"></label>
-    <button id="save">Save &amp; reload data</button> <button id="clearcache">Clear cache</button>
-    <div class="muted" style="margin-top:6px">If the proxy prefix ends in <code>?</code>, <code>=</code> or contains <code>?</code>, the full target URL is percent-encoded and appended; otherwise it is appended raw. Settings are stored in this browser's localStorage only.</div>
-  </div>
   <details id="status"><summary><b>Data status</b> <span id="stsum" class="muted"></span></summary>
     <div class="muted" style="margin-top:4px">One chip per series (OK · OK via fallback · CACHED · BLOCKED (CORS) · FAILED · EMPTY). Hover a chip for detail.</div>
     <div id="strip"></div>
@@ -173,8 +162,8 @@ const PROXY_BASE   = "https://black-bush-e1a3.mnsbafna.workers.dev/?url=";   // 
 /* ================================================================ */
 
 /* ---------- settings (localStorage, guarded) ---------- */
-const CFG = {key: FRED_API_KEY, proxy: PROXY_BASE, src: 'snapshot'};   // src: 'snapshot' (daily file built on GitHub) or 'live'
-try { const s = JSON.parse(localStorage.getItem('fmm_cfg') || 'null'); if (s) { if (s.key) CFG.key = s.key; if (typeof s.proxy === 'string') CFG.proxy = s.proxy; if (s.src) CFG.src = s.src; } } catch (e) {}
+const CFG = {key: FRED_API_KEY, proxy: PROXY_BASE, src: 'live'};   // src: 'live' (fetch each source) or 'snapshot' ("Cached": the daily file built on GitHub)
+try { const v = localStorage.getItem('fmm_src'); if (v === 'live' || v === 'snapshot') CFG.src = v; localStorage.removeItem('fmm_cfg'); } catch (e) {}   // fmm_cfg: old settings panel (key/proxy), no longer used
 
 /* ---------- helpers ---------- */
 // strict finite check: cached JSON turns NaN into null, and the global isFinite(null) is true
@@ -305,7 +294,7 @@ async function load(id, label, sources, force) {
     const first = errs.find(e => e.kind !== 'empty');
     S.state = !first ? 'EMPTY' : first.kind === 'network' ? 'BLOCKED' : 'FAILED';
     S.note = errs.map(e => `${e.s}: ${e.msg}`).join('; ');
-    if (errs.some(e => e.kind === 'network')) S.note += ' — Set PROXY_BASE in Settings to route requests through a CORS proxy.';
+    if (errs.some(e => e.kind === 'network')) S.note += ' — the browser blocked it (CORS); the Cloudflare proxy may be down.';
   }
   return done(id);
 }
@@ -337,7 +326,7 @@ function sumOps(j, filter) {
   return Object.keys(m).sort().map(d => ({d, v: m[d] / 1e9}));
 }
 async function fredRows(series, start, scale) {
-  if (!CFG.key) { const e = new Error('no FRED API key set (Settings → FRED API key; only needed in live mode)'); e.kind = 'empty'; throw e; }
+  if (!CFG.key) { const e = new Error('no FRED API key'); e.kind = 'empty'; throw e; }
   const u = `https://api.stlouisfed.org/fred/series/observations?series_id=${series}&api_key=${encodeURIComponent(CFG.key)}&file_type=json&observation_start=${start}`;
   const j = await fetchJSON(u);
   const a = (j.observations || []).filter(o => o.value !== '.' && isFinite(parseFloat(o.value))).map(o => ({d: o.date, v: parseFloat(o.value) * (scale || 1)}));
@@ -1619,14 +1608,11 @@ $('#sections').addEventListener('click', e => { const tr = e.target.closest('#sr
 $('#mk').checked = OPT.mk;
 $('#mk').onchange = () => { OPT.mk = $('#mk').checked; try { localStorage.setItem('fmm_opt', JSON.stringify(OPT)); } catch (e) {} for (const id in CHARTS) CHARTS[id].draw(); };
 $('#refresh').onclick = () => { buildDOM(); loadData(true); };
-$('#setbtn').onclick = () => $('#settings').classList.toggle('open');
-$('#in-key').value = CFG.key; $('#in-proxy').value = CFG.proxy; $('#in-src').value = CFG.src;
-$('#save').onclick = () => {
-  CFG.key = $('#in-key').value.trim() || FRED_API_KEY; CFG.proxy = $('#in-proxy').value.trim(); CFG.src = $('#in-src').value;
-  try { localStorage.setItem('fmm_cfg', JSON.stringify(CFG)); } catch (e) {}
-  buildDOM(); loadData(true);
-};
-$('#clearcache').onclick = () => { try { Object.keys(localStorage).filter(k => k.startsWith('fmm2:')).forEach(k => localStorage.removeItem(k)); } catch (e) {} $('#lastref').textContent = 'cache cleared'; };
+// Live / Cached switch (remembered per browser)
+const syncSrc = () => $('#src').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === CFG.src));
+$('#src').onclick = e => { const b = e.target.closest('button'); if (!b || b.dataset.v === CFG.src) return;
+  CFG.src = b.dataset.v; try { localStorage.setItem('fmm_src', CFG.src); } catch (e) {} syncSrc(); buildDOM(); loadData(true); };
+syncSrc();
 
 /* ============================ TABLE VIEW ============================ */
 // Base series: code -> {s: short header, n: name, u: '%' (rate) or 'bn' (volume), id/k: DATA series and field, step: carried forward between prints}
