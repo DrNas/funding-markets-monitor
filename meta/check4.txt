@@ -1,8 +1,9 @@
-https://funding.manasbafna.com/ads.txt -> 200 final=https://funding.manasbafna.com/ads.txt bytes=59 hasPub=true server=GitHub.com
-  google.com, pub-2104381144893771, DIRECT, f08c47fec0942fa0 
-https://funding.manasbafna.com/ -> 200 final=https://funding.manasbafna.com/ bytes=169124 hasPub=true server=GitHub.com
-  <!doctype html> <html lang="en"> <head> <meta charset="utf-8"> <meta name="viewport" content="width=device-width, initial-scale=1"> <title>Funding Markets Monit
-https://manasbafna.com/ads.txt -> ERR ENOTFOUND
-https://manasbafna.com/ -> ERR ENOTFOUND
+A manasbafna.com: ["185.199.111.153","185.199.110.153","185.199.108.153","185.199.109.153"]
+AAAA manasbafna.com: ENODATA
+CAA manasbafna.com: ENODATA
+CNAME www.manasbafna.com: ENOTFOUND
+A www.manasbafna.com: ENOTFOUND
+CNAME funding.manasbafna.com: ["drnas.github.io"]
+http://manasbafna.com/ads.txt -> 200 location=null server=GitHub.com
+https://manasbafna.com/ads.txt -> ERR ERR_TLS_CERT_ALTNAME_INVALID
 https://www.manasbafna.com/ -> ERR ENOTFOUND
-http://manasbafna.com/ads.txt -> ERR ENOTFOUND
