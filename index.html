@@ -418,7 +418,8 @@ function loadAll(force) {
   P.bgcr = load('bgcr', 'BGCR', [{name: 'NY Fed', run: () => nyfRate('secured/bgcr')}], force);
   P.effr = load('effr', 'EFFR', [{name: 'NY Fed', run: () => nyfRate('unsecured/effr')}], force);
   P.dtcc = load('dtcc', 'DTCC GCF Repo Index', [{name: 'DTCC', run: async () => {
-    const t = await fetchJSON('https://cms-prod.dtcc.com/data/gcfindex.csv', {text: true});
+    // DTCC's CDN serves this file with max-age=7 days: a unique query string gets today's copy instead of a cached one
+    const t = await fetchJSON('https://cms-prod.dtcc.com/data/gcfindex.csv?t=' + Date.now(), {text: true});
     const a = [];
     for (const line of t.split(/\r?\n/).slice(1)) {
       const c = line.split(','); const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((c[0] || '').trim()); if (!m) continue;
@@ -1366,7 +1367,8 @@ function drawToday() {
       if (!st) { h += `<tr><td>${esc((metric(id) || {}).label || id)}</td><td class="n muted" colspan="3">n/a</td></tr>`; continue; }
       const du = st.m.unit === 'bn' ? 'bn' : 'bp';
       // date tag when the print isn't for the same day as SOFR's: older (weekly or lagging) or newer (DTCC prints the same evening)
-      const tag = st.d === sofrD ? '' : st.d > sofrD ? ` <span style="color:var(--green)">${dlabel(st.d)} · newer</span>` : ` <span class="muted">${dlabel(st.d)}${st.wk ? ' (wk)' : ''}</span>`;
+      const step = BASES[code] && BASES[code].step;   // IORB/RRP/SRF only change at FOMC meetings; FRED dating them today isn't news
+      const tag = st.d === sofrD || (step && st.d > sofrD) ? '' : st.d > sofrD ? ` <span style="color:var(--green)">${dlabel(st.d)} · newer</span>` : ` <span class="muted">${dlabel(st.d)}${st.wk ? ' (wk)' : ''}</span>`;
       h += `<tr title="${esc(st.m.title)}"><td>${esc(TODAY_LABELS[id] || st.m.label)}${tag}</td><td class="n"><b>${fv(st.m.unit, st.v, code)}</b></td><td class="n">${fd(du, st.d1)}</td><td class="n">${fd(du, st.d7)}</td></tr>`;
     }
     h += '</tbody></table></div>';
