@@ -1,9 +1,12 @@
 name: Daily data
 
 on:
+  # GitHub's scheduled runs are best effort (sometimes late or skipped), so there are backups: each run rebuilds
+  # everything, so whichever runs last wins. Times are UTC; New York is UTC-4 in summer, UTC-5 in winter.
   schedule:
-    - cron: '17 13 * * 1-5'   # ~9:17am New York (8:17 in winter): after NY Fed publishes SOFR/EFFR (~8:00)
-    - cron: '47 21 * * 1-5'   # ~5:47pm New York: picks up Treasury yields and late updates
+    - cron: '17 13,14,15 * * 1-5'   # ~9:17, 10:17, 11:17am New York (an hour earlier in winter): after NY Fed publishes SOFR/EFFR (~8:00)
+    - cron: '47 21 * * 1-5'         # ~5:47pm New York: Treasury yields and late updates
+    - cron: '17 0 * * 2-6'          # ~8:17pm New York (7:17 in winter), backup for the evening run
   workflow_dispatch:           # "Run workflow" button on the Actions tab
   push:
     branches: [main]
