@@ -17,7 +17,7 @@ Sections with `view: 'analysis'` render into `#analysispage` (same card, range a
 - `scripts/build-data.mjs` runs the page's own `<script id="data-layer">` block in Node (via `new Function`, with the UI hooks stubbed). It fetches every source directly (no proxy needed on a server, FRED key from the `FRED_API_KEY` secret) and writes `_site/data/latest.json` = `{generated, today, start, failed, series: {id: {label, state, n, latest, src, fb, note, built, data}}}`. The site is deployed to Pages from that artifact, so nothing is committed daily except the DTCC archive.
 - If a series fails, the previous snapshot's copy is kept (state CACHED), and the job ends red so GitHub emails the owner. If SOFR or EFFR is missing, nothing is published.
 - `data/dtcc-gcf-history.csv` archives every DTCC GCF day seen (DTCC publishes only ~12 months), merged into the snapshot.
-- The page loads `SNAPSHOT_URL` first (Settings > Data = Daily snapshot, the default). It falls back to live fetching if the file is missing or older than `SNAPSHOT_MAX_AGE_D` (4 days). "Live from each source" mode needs the FRED key pasted in Settings. The key is no longer in the HTML.
+- The page loads `SNAPSHOT_URL` first (Settings > Data = Daily snapshot, the default). It falls back to live fetching if the file is missing or older than `SNAPSHOT_MAX_AGE_D` (4 days). "Live from each source" mode uses `FRED_API_KEY` in the HTML (public, at the owner's request), or a key saved in Settings.
 - Keep the data layer free of DOM access (`document`, `getComputedStyle`, Chart) at top level, or the build breaks.
 
 1. **Net issuance** (settlement-date bars for 50 days, monthly bars, table of announced auctions)

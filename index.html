@@ -155,7 +155,7 @@ footer{margin-top:30px;color:var(--muted);font-size:11.5px}
 <!-- Data layer: fetching, parsing and derived series. No DOM access, so scripts/build-data.mjs runs this same block in Node for the daily snapshot. -->
 <script id="data-layer">
 /* ============================ CONFIG ============================ */
-const FRED_API_KEY = "";   // only needed for "Live from sources" mode; paste it in Settings (the daily snapshot uses a GitHub secret)
+const FRED_API_KEY = "e7482280d903251793be8ef678d3b6d0";   // used in "Live from each source" mode (public: this file is published); the daily snapshot uses the FRED_API_KEY GitHub secret
 const PROXY_BASE   = "https://black-bush-e1a3.mnsbafna.workers.dev/?url=";   // CORS proxy prefix; FRED/TreasuryDirect go through it, other hosts only if the browser blocks them
 /* ================================================================ */
 
