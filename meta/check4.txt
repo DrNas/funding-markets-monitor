@@ -1,30 +1,8 @@
-https://funding.manasbafna.com/ -> 200 final=https://funding.manasbafna.com/data/latest.json?t=1793286004478
-generated 2026-10-29T14:22:30.135Z failed=[]
-  sofr: OK n=1366 latest=2026-10-28 dataRows=1366 last={"d":"2026-10-28","rate":3.94,"p1":3.89,"p25":3.92,"p75":3.99,"p99":4.02,"vol":3074,"tf":null,"tt":null}
-  tgcr: OK n=1366 latest=2026-10-28 dataRows=1366 last={"d":"2026-10-28","rate":3.92,"p1":3.84,"p25":3.92,"p75":3.93,"p99":3.96,"vol":1180,"tf":null,"tt":null}
-  bgcr: OK n=1366 latest=2026-10-28 dataRows=1366 last={"d":"2026-10-28","rate":3.92,"p1":3.84,"p25":3.92,"p75":3.93,"p99":3.97,"vol":1210,"tf":null,"tt":null}
-  effr: OK n=1373 latest=2026-10-28 dataRows=1373 last={"d":"2026-10-28","rate":3.88,"p1":3.85,"p25":3.87,"p75":3.89,"p99":3.91,"vol":116,"tf":3.75,"tt":4}
-  dtcc: OK n=253 latest=2026-10-28 dataRows=253 last={"d":"2026-10-28","mbsvol":144.602,"mbs":3.97,"v":3.954,"vol":55.14}
-  rrp: OK n=1366 latest=2026-10-28 dataRows=1366 last={"d":"2026-10-28","v":0.176}
-  srf: OK n=1367 latest=2026-10-29 dataRows=1367 last={"d":"2026-10-29","v":0}
-  soma: OK n=433 latest=2026-10-21 dataRows=object last=
-  iorb: OK n=1919 latest=2026-10-29 dataRows=1919 last={"d":"2026-10-29","v":3.9}
-  dfedtarl: OK n=2001 latest=2026-10-29 dataRows=2001 last={"d":"2026-10-29","v":3.75}
-  dfedtaru: OK n=2001 latest=2026-10-29 dataRows=2001 last={"d":"2026-10-29","v":4}
-  wresbal: OK n=285 latest=2026-10-21 dataRows=285 last={"d":"2026-10-21","v":2962.607}
-  gdp: OK n=23 latest=2026-07-01 dataRows=23 last={"d":"2026-07-01","v":33010.036}
-  rrponts: OK n=1366 latest=2026-10-28 dataRows=1366 last={"d":"2026-10-28","v":0.176}
-  tga: OK n=1135 latest=2026-10-27 dataRows=1135 last={"d":"2026-10-27","v":1052.53}
-  td_upcoming: OK n=6 latest= dataRows=6 last={"cusip":"912797VH7","type":"Bill","term":"6-Week","orig":"","tips":false,"frn":false,"cmb":false,"auction":"","issue":"
-  td_out: OK n=894 latest= dataRows=894 last={"cusip":"912810EY0","type":"Bond","term":"30-Year","orig":"30-Year","tips":false,"frn":false,"cmb":false,"auction":"","
-  gcf_ofr: OK n=1365 latest=2026-10-27 dataRows=1365 last={"d":"2026-10-27","v":3.96}
-  gcf_imp: OK n=1366 latest=2026-10-28 dataRows=1366 last={"d":"2026-10-28","v":3.9199999999999817,"vol":30}
-  mspd: OK n=60 latest=2026-09-30 dataRows=60 last={"d":"2026-09-30","ym":"2026-09","net":6.8769797897022045,"tips":19.981727589700313,"frn":27.99985019999997,"bills":-129
-  dgs2: OK n=1367 latest=2026-10-27 dataRows=1367 last={"d":"2026-10-27","v":4.7}
-  dgs7: OK n=1367 latest=2026-10-27 dataRows=1367 last={"d":"2026-10-27","v":4.91}
-  dgs1m: OK n=1367 latest=2026-10-27 dataRows=1367 last={"d":"2026-10-27","v":4.043835616438356}
-  dgs3m: OK n=1367 latest=2026-10-27 dataRows=1367 last={"d":"2026-10-27","v":4.162191780821917}
-  dvp: OK n=1303 latest=2026-10-27 dataRows=1303 last={"d":"2026-10-27","v":3.97,"vol":3032.57347334564}
-  somasum: OK n=287 latest=2026-10-21 dataRows=287 last={"d":"2026-10-21","bills":567.8749267,"nb":3600.7422278,"frn":20.0455538,"tips":383.99118493188,"mbs":1895.1767633266998
-  h41: OK n=287 latest=2026-10-21 dataRows=287 last={"d":"2026-10-21","res":2969.522,"assets":6753.604,"sec":6470.178,"rrp":334.083}
-  pd: OK n=284 latest=2026-10-14 dataRows=284 last={"d":"2026-10-14","pos":443.498,"frn":4.058,"c30":50.953,"c7":23.75,"bills":98.701,"c3":24.228,"repo":3184.926,"c2":55.8
+https://funding.manasbafna.com/ads.txt -> 200 final=https://funding.manasbafna.com/ads.txt bytes=59 hasPub=true server=GitHub.com
+  google.com, pub-2104381144893771, DIRECT, f08c47fec0942fa0 
+https://funding.manasbafna.com/ -> 200 final=https://funding.manasbafna.com/ bytes=169124 hasPub=true server=GitHub.com
+  <!doctype html> <html lang="en"> <head> <meta charset="utf-8"> <meta name="viewport" content="width=device-width, initial-scale=1"> <title>Funding Markets Monit
+https://manasbafna.com/ads.txt -> ERR ENOTFOUND
+https://manasbafna.com/ -> ERR ENOTFOUND
+https://www.manasbafna.com/ -> ERR ENOTFOUND
+http://manasbafna.com/ads.txt -> ERR ENOTFOUND
