@@ -1,4 +1,4 @@
-// one-off: why does live mode get 403 from FRED through the Cloudflare proxy?
+// one-off (rerun): why does live mode get 403 from FRED through the Cloudflare proxy?
 const out = [], KEY = 'e7482280d903251793be8ef678d3b6d0', PROXY = 'https://black-bush-e1a3.mnsbafna.workers.dev/?url=';
 const fred = `https://api.stlouisfed.org/fred/series/observations?series_id=IORB&api_key=${KEY}&file_type=json&sort_order=desc&limit=2`;
 const yc = 'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv';
