@@ -5,6 +5,14 @@
 
 `cors-proxy-worker.js` is a Cloudflare Worker CORS proxy (allowlisted hosts only). The user has deployed it; its URL is baked into `PROXY_BASE` at the top of the HTML (`?url=` style). The FRED key is in `FRED_API_KEY` in the same block. Both can be overridden from the in-page Settings panel (saved to localStorage).
 
+## Today, Fed balance sheet, markers, DVP
+- **Today** (`s0`, top of the dashboard, `drawToday()`): boxes of Table-view metric ids (`TODAY_BOXES`). `todayStat()` takes the latest print on the series' own dates, Δ vs the previous print and vs the print a week earlier (rates in bp). Weekly series (`WEEKLY`) show the week-on-week change only. The calendar box shows the next settlement (`computeNI`), this month's SR1−ZQ, and the next month-end/quarter-end/tax date/GSE window/FOMC.
+- **6 · Fed balance sheet and reserves** (`s13`): NY Fed `soma/summary.json` (weekly holdings by type, $) → weekly change stacked. `resDrivers()` uses H.4.1 Wednesday levels from FRED (`H41_SERIES`: WALCL, WSHOSHO, WRBWFRBL, WLRRAL) plus the DTS TGA close: Δreserves = Δsecurities + Δother assets − ΔTGA − Δreverse repos − residual (mostly currency). Summary table for 1/4/13 weeks.
+- **Calendar markers** (`calEvents()`, `evt` plugin, header "markers" toggle → `OPT.mk`): month-ends, quarter-ends, FOMC decision days (`FOMC`, hard-coded: **add each new year**), tax dates (Apr/Jun/Sep/Dec 15), mid-month coupon settlement (15th), and shaded GSE windows. Drawn on every date-axis chart.
+- **Month-end and quarter-end** (Analysis, `s14`, `meRows()`): last business day vs the 5 fixings before it; measures in `ME_MEAS` (rate − EFFR, its Δ, 99th − median, − IORB, rate Δ, SRF, ON RRP and its Δ).
+- **DVP** (`dvp`): OFR `REPO-DVP_AR_OO-P` (rate) and `REPO-DVP_TV_OO-P` (volume, $ → bn). Table bases `DVP`, `DVPVOL`; spreads vs SOFR/GCO/TGCR/IORB.
+- Dashboard section titles were renumbered: Fed balance sheet is 6, so the old 6–9 are now 7–10 (ids unchanged).
+
 ## Analysis view (`#analysis`, header switch)
 Sections with `view: 'analysis'` render into `#analysispage` (same card, range and control machinery as the dashboard).
 - **10 · GSE cash week** (`gseRows()`): for each month, the window is the fixing dates from `OPT.gStart` (18th) up to the day before `OPT.gPay` (25th), both rolled forward to a business day. The baseline is the 5 fixings before the window. Per month it computes: average rate, Δ vs the week before, EFFR average, rate − EFFR (window and week before) and its Δ, and rate − IORB. Controls: rate (SOFR/TGCR/BGCR), measure, month (chart by year), year (chart by month), window days. A year × month heat grid and a table of every month sit below.

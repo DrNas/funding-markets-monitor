@@ -27,7 +27,7 @@ button:hover{background:#30363d}
 .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
 .seg button:last-child{border-radius:0 6px 6px 0}
 .seg button.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-nav a{color:var(--muted);text-decoration:none;margin-right:10px}
+nav a{color:var(--muted);text-decoration:none;margin-right:8px;font-size:12px}
 nav a:hover{color:var(--text)}
 main{max-width:1560px;margin:0 auto;padding:12px 16px 60px}
 #settings{display:none;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:10px 0}
@@ -101,6 +101,12 @@ body:not(.aview) #analysispage{display:none}
 #status{margin-top:8px}
 #status summary{cursor:pointer;user-select:none;width:max-content;max-width:100%}
 #stsum b{font-weight:600}
+.gtoday{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.tbox{padding:6px 8px 4px}
+.tbox table td,.tbox table th{padding:2px 5px}
+.tbox .ct{margin-bottom:2px}
+.mk-key{font-size:11px;color:var(--muted);display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mk-key i{display:inline-block;width:12px;height:0;border-top:2px solid;vertical-align:middle;margin-right:3px}
 footer{margin-top:30px;color:var(--muted);font-size:11.5px}
 </style>
 </head>
@@ -109,9 +115,10 @@ footer{margin-top:30px;color:var(--muted);font-size:11.5px}
   <div class="hrow">
     <h1>Funding Markets Monitor</h1>
     <span class="seg" id="view"><button data-v="dash">Dashboard</button><button data-v="table">Table</button><button data-v="analysis">Analysis</button></span>
-    <nav><a href="#s1">Net issuance</a><a href="#s2">Corridor</a><a href="#s3">Spreads</a><a href="#s4">Dispersion</a><a href="#s5">Liquidity</a><a href="#s6">Issuance history</a><a href="#s7">GC vs IORB</a><a href="#s8">2y / 7y</a><a href="#s9">SR1 − ZQ</a></nav>
+    <nav><a href="#s1">Net issuance</a><a href="#s2">Corridor</a><a href="#s3">Spreads</a><a href="#s4">Dispersion</a><a href="#s0">Today</a><a href="#s5">Liquidity</a><a href="#s13">Fed balance sheet</a><a href="#s6">Issuance history</a><a href="#s7">GC vs IORB</a><a href="#s8">2y / 7y</a><a href="#s9">SR1 − ZQ</a></nav>
     <span class="sp"></span>
     <span class="muted hdrrange">all sections:</span><span class="seg hdrrange" id="range"><button data-m="3">3M</button><button data-m="6" class="on">6M</button><button data-m="12">1Y</button><button data-m="24">2Y</button></span>
+    <label class="muted" title="Chart markers: Fed meetings (purple), tax dates (red dashed), mid-month coupon settlements (teal dotted), GSE cash windows (shaded), month-ends (grey), quarter-ends (amber)"><input type="checkbox" id="mk"> markers</label>
     <button id="refresh">Refresh</button>
     <span class="muted" id="lastref"></span>
     <button id="setbtn">Settings</button>
@@ -210,10 +217,10 @@ const dlabel = s => MON[+s.slice(5, 7) - 1] + ' ' + (+s.slice(8));
 const DATA = {};     // id -> parsed data
 const STATUS = {};   // id -> {state,n,latest,note,t,label}
 const P = {};        // id -> load promise
-const RNG = {s2: {m: 6, from: ''}, s3: {m: 6, from: ''}, s4: {m: 6, from: ''}, s5: {m: 6, from: ''}, s6: {m: 24, from: ''}, s7: {m: 6, from: ''}, s8: {m: 6, from: ''}, s9: {m: 12, from: ''}, s11: {m: 12, from: ''}, s12: {m: 24, from: ''}};
+const RNG = {s2: {m: 6, from: ''}, s3: {m: 6, from: ''}, s4: {m: 6, from: ''}, s5: {m: 6, from: ''}, s6: {m: 24, from: ''}, s7: {m: 6, from: ''}, s8: {m: 6, from: ''}, s9: {m: 12, from: ''}, s11: {m: 12, from: ''}, s12: {m: 24, from: ''}, s13: {m: 12, from: ''}};
 const HDR_SECS = ['s2', 's3', 's4', 's5', 's7', 's8'];   // sections the header range buttons drive (s6 is monthly, with its own 1Y–5Y buttons)
 // section controls: GC series and threshold for the GC-vs-IORB section, yield-or-price for the 2y/7y section
-const OPT = {gc: 'dtcc', th: 2, ust: 'bp', prS: null, prE: null, gRate: 'sofr', gMeas: 'se', gStart: 18, gPay: 25, gM: null, gY: null};   // prS/prE: assumed SOFR/EFFR for the unfixed days of the current month (null = carry the last fixing)
+const OPT = {gc: 'dtcc', th: 2, ust: 'bp', prS: null, prE: null, gRate: 'sofr', gMeas: 'se', gStart: 18, gPay: 25, gM: null, gY: null, mk: true, eRate: 'sofr', eMeas: 'se', eM: null, eY: null};   // prS/prE: assumed SOFR/EFFR for the unfixed days of the current month (null = carry the last fixing)
 try { Object.assign(OPT, JSON.parse(localStorage.getItem('fmm_opt') || '{}')); } catch (e) {}
 if (!OPT.gV) { OPT.gMeas = 'se'; OPT.gV = 1; }   // GSE charts now default to rate − EFFR (immune to Fed moves)   // per-section range: months, or a custom start date
 let CUR = 's2';      // section whose card is currently being built
@@ -383,6 +390,15 @@ function parseYC(text) {
 const PD_KEYS = {pos: 'PDPOSGST-TOT', bills: 'PDPOSGS-B', c2: 'PDPOSGSC-L2', c3: 'PDPOSGSC-G2L3', c6: 'PDPOSGSC-G3L6', c7: 'PDPOSGSC-G6L7', c11: 'PDPOSGSC-G7L11',
   c21: 'PDPOSGSC-G11L21', c30: 'PDPOSGSC-G21', frn: 'PDPOSGS-BFRN', repo: 'PDSORA-UTSETTOT', rrepo: 'PDSIRRA-UTSETTOT'};
 const MM = 360 / 365;
+// H.4.1 Wednesday levels used to explain weekly changes in reserves ($ millions on FRED)
+const H41_SERIES = {assets: 'WALCL', sec: 'WSHOSHO', res: 'WRBWFRBL', rrp: 'WLRRAL'};
+// FOMC decision days (second day of each meeting), from federalreserve.gov. Add each new year's schedule here.
+const FOMC = ['2021-01-27', '2021-03-17', '2021-04-28', '2021-06-16', '2021-07-28', '2021-09-22', '2021-11-03', '2021-12-15',
+  '2022-01-26', '2022-03-16', '2022-05-04', '2022-06-15', '2022-07-27', '2022-09-21', '2022-11-02', '2022-12-14',
+  '2023-02-01', '2023-03-22', '2023-05-03', '2023-06-14', '2023-07-26', '2023-09-20', '2023-11-01', '2023-12-13',
+  '2024-01-31', '2024-03-20', '2024-05-01', '2024-06-12', '2024-07-31', '2024-09-18', '2024-11-07', '2024-12-18',
+  '2025-01-29', '2025-03-19', '2025-05-07', '2025-06-18', '2025-07-30', '2025-09-17', '2025-10-29', '2025-12-10',
+  '2026-01-28', '2026-03-18', '2026-04-29', '2026-06-17', '2026-07-29', '2026-09-16', '2026-10-28', '2026-12-09'];
 
 /* ---------- load orchestration ---------- */
 function loadAll(force) {
@@ -478,6 +494,24 @@ function loadAll(force) {
   // bill yields are published on a bond-equivalent (365-day) basis; × 360/365 puts them on SOFR's money-market basis
   P.dgs1m = fred('dgs1m', '1m bill (money-market basis)', 'DGS1MO', START, MM, [{name: 'Treasury yield curve', run: () => ycCol('1 Mo', MM)}]);
   P.dgs3m = fred('dgs3m', '3m bill (money-market basis)', 'DGS3MO', START, MM, [{name: 'Treasury yield curve', run: () => ycCol('3 Mo', MM)}]);
+  P.dvp = load('dvp', 'DVP repo (OFR, prelim)', [{name: 'OFR', run: async () => {
+    const [r, v] = await Promise.all(['REPO-DVP_AR_OO-P', 'REPO-DVP_TV_OO-P'].map(m => fetchJSON(`${OFR}/series/timeseries?mnemonic=${m}&start_date=${START}`)));
+    const vm = new Map((v || []).filter(x => x[1] != null).map(x => [x[0], x[1] / 1e9]));
+    return rowsRes((r || []).filter(x => x[1] != null).map(x => ({d: x[0], v: x[1], vol: vm.has(x[0]) ? vm.get(x[0]) : null})), {note: 'OFR DVP overnight/open average rate and volume (preliminary)'});
+  }}], force);
+  P.somasum = load('somasum', 'Fed holdings by type (weekly)', [{name: 'NY Fed', run: async () => {
+    const j = await fetchJSON(`${NYF}/soma/summary.json`, {timeout: 40000});
+    const a = ((j.soma || {}).summary || []).filter(r => r.asOfDate >= addDays(START, -14)).map(r => {
+      const n = k => { const v = num(r[k]); return isFinite(v) ? v / 1e9 : 0; };
+      return {d: r.asOfDate, bills: n('bills'), nb: n('notesbonds'), frn: n('frn'), tips: n('tips') + n('tipsInflationCompensation'), mbs: n('mbs') + n('cmbs'), agy: n('agencies'), total: n('total')};
+    }).sort(byDate);
+    return rowsRes(a, {note: 'SOMA par value, weekly as of Wednesday (TIPS include inflation compensation)'});
+  }}], force);
+  P.h41 = load('h41', 'Fed balance sheet (H.4.1, weekly)', [{name: 'FRED', run: async () => {
+    const m = {};
+    await Promise.all(Object.entries(H41_SERIES).map(async ([k, id]) => { const r = await fredRows(id, addDays(START, -14), 1 / 1000); for (const x of r.data) (m[x.d] = m[x.d] || {d: x.d})[k] = x.v; }));
+    return rowsRes(Object.values(m).sort(byDate), {note: 'Wednesday levels: total assets, securities held outright, reserve balances, reverse repos'});
+  }}], force);
   P.pd = load('pd', 'Primary dealer positions & financing (weekly)', [{name: 'NY Fed', run: async () => {
     const m = {};
     await Promise.all(Object.entries(PD_KEYS).map(async ([k, key]) => {
@@ -547,16 +581,34 @@ Chart.register({
     const ctx = c.ctx; ctx.save(); ctx.strokeStyle = 'rgba(230,237,243,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, ca.top); ctx.lineTo(x, ca.bottom); ctx.stroke(); ctx.restore();
   }
 });
+// Calendar events between two dates: month-/quarter-ends, Fed meetings, tax dates, mid-month coupon settlements, GSE cash windows
+function calEvents(lo, hi) {
+  const list = [], gse = [];
+  for (let m = lo.slice(0, 8) + '01'; m <= hi; m = addMonths(m, 1, false)) {
+    const ym = m.slice(0, 7), mo = +ym.slice(5), me = addMonths(m, 0, true);
+    list.push({d: me, k: mo % 3 ? 'me' : 'qe'});
+    list.push({d: rollFwd(ym + '-15'), k: 'cpn'});
+    if ([4, 6, 9, 12].includes(mo)) list.push({d: rollFwd(ym + '-15'), k: 'tax'});
+    gse.push({s: rollFwd(`${ym}-${pad(OPT.gStart || 18)}`), e: rollFwd(`${ym}-${pad(OPT.gPay || 25)}`)});
+  }
+  for (const d of FOMC) list.push({d, k: 'fomc'});
+  return {list: list.filter(e => e.d >= lo && e.d <= hi), gse: gse.filter(g => g.e >= lo && g.s <= hi)};
+}
+const EVT_STYLE = {me: ['rgba(139,148,158,.18)', []], qe: ['rgba(210,153,34,.55)', []], fomc: ['rgba(188,140,255,.6)', []], tax: ['rgba(248,81,73,.5)', [4, 3]], cpn: ['rgba(57,197,207,.4)', [1, 3]]};
 Chart.register({
-  id: 'evt',   // month-end (faint) and quarter-end (brighter) verticals
+  id: 'evt',   // calendar markers (header toggle); with markers off, charts that ask for it still get month-/quarter-ends
   beforeDatasetsDraw(c) {
-    const o = c.options.plugins.evt; if (!o || !o.on) return;
-    const sx = c.scales.x, ca = c.chartArea, ctx = c.ctx; let d = new Date(sx.min); let y = d.getUTCFullYear(), m = d.getUTCMonth();
+    const o = c.options.plugins.evt; if (!o || !o.time || !(o.on || OPT.mk)) return;
+    const sx = c.scales.x, ca = c.chartArea, ctx = c.ctx, ev = calEvents(iso(new Date(sx.min)), iso(new Date(sx.max)));
     ctx.save(); ctx.lineWidth = 1;
-    for (let i = 0; i < 20; i++, m++) {
-      const t = Date.UTC(y, m + 1, 0); if (t > sx.max) break; if (t < sx.min) continue;
-      const q = (new Date(t).getUTCMonth() % 3) === 2; const px = sx.getPixelForValue(t);
-      ctx.strokeStyle = q ? 'rgba(210,153,34,.55)' : 'rgba(139,148,158,.18)'; ctx.beginPath(); ctx.moveTo(px, ca.top); ctx.lineTo(px, ca.bottom); ctx.stroke();
+    if (OPT.mk) for (const g of ev.gse) {
+      const a = Math.max(ca.left, sx.getPixelForValue(ms(g.s))), b = Math.min(ca.right, sx.getPixelForValue(ms(g.e)));
+      if (b > a) { ctx.fillStyle = 'rgba(57,197,207,.06)'; ctx.fillRect(a, ca.top, b - a, ca.bottom - ca.top); }
+    }
+    for (const e of ev.list) {
+      if (!OPT.mk && e.k !== 'me' && e.k !== 'qe') continue;
+      const px = sx.getPixelForValue(ms(e.d)); if (px < ca.left || px > ca.right) continue;
+      const [col, dash] = EVT_STYLE[e.k]; ctx.strokeStyle = col; ctx.setLineDash(dash); ctx.beginPath(); ctx.moveTo(px, ca.top); ctx.lineTo(px, ca.bottom); ctx.stroke();
     }
     ctx.restore();
   }
@@ -1163,8 +1215,178 @@ CARDS.pd_fin = {id: 'pd_fin', sec: 's12', title: 'Dealer Treasury repo financing
     note: `Treasury securities excluding TIPS; all venues (tri-party, GCF, cleared and uncleared bilateral), overnight and term. Dotted = weeks the NY Fed withheld a figure ("*" in its data; ${withheld} of ${rows.length} weeks shown).`};
 }};
 
+/* ---------- 6 · Fed balance sheet and reserves ---------- */
+const wkRows = (rows, sec) => { const a = rows || [], rg = RNG[sec]; const cut = rg.from || (a.length ? addMonths(a[a.length - 1].d, -rg.m, false) : TODAY); return a.filter(r => r.d >= cut); };
+const SOMA_TYPES = [['bills', 'Bills', 'blue'], ['nb', 'Notes & bonds', 'orange'], ['frn', 'FRNs', 'cyan'], ['tips', 'TIPS', 'green'], ['mbs', 'MBS', 'purple'], ['agy', 'Agency debt', 'grey']];
+function somaChanges() {   // weekly change by type, $bn
+  const a = DATA.somasum || [], out = [];
+  for (let i = 1; i < a.length; i++) { const r = {d: a[i].d}; for (const [k] of SOMA_TYPES) r[k] = a[i][k] - a[i - 1][k]; r.total = a[i].total - a[i - 1].total; out.push(r); }
+  return out;
+}
+// Weekly change in reserves = Δ securities + Δ other assets − Δ TGA − Δ reverse repos − Δ everything else (mostly currency), all Wednesday levels
+const RES_PARTS = [['sec', 'Fed securities', 'blue'], ['oth', 'Other Fed assets (loans, SRF, premiums)', 'cyan'], ['tga', 'TGA (rise drains)', 'orange'], ['rrp', 'Reverse repos incl. ON RRP (rise drains)', 'purple'], ['rest', 'Other (mostly currency)', 'grey']];
+function resDrivers() {
+  const H = (DATA.h41 || []).filter(r => [r.assets, r.sec, r.res, r.rrp].every(isFinite)), T = (DATA.tga || []).filter(r => isFinite(r.v)), out = [];
+  const tgaAt = d => stepAt(T, d, 'v');
+  for (let i = 1; i < H.length; i++) {
+    const a = H[i - 1], b = H[i], t0 = tgaAt(a.d), t1 = tgaAt(b.d); if (t0 == null || t1 == null) continue;
+    const r = {d: b.d, res: b.res - a.res, sec: b.sec - a.sec, oth: (b.assets - b.sec) - (a.assets - a.sec), tga: -(t1 - t0), rrp: -(b.rrp - a.rrp), level: b.res};
+    r.rest = r.res - (r.sec + r.oth + r.tga + r.rrp); out.push(r);
+  }
+  return out;
+}
+function stackSpec(sec, rows, parts, totKey, totLabel, o) {
+  const ds = parts.map(([k, l, c]) => ({label: l, data: rows.map(r => Math.round(r[k] * 10) / 10), backgroundColor: alpha(css('--' + c), .85), borderWidth: 0, stack: 's', order: 2, _col: c, swatch: 'bar'}));
+  ds.push({type: 'line', label: totLabel, data: rows.map(r => Math.round(r[totKey] * 10) / 10), showLine: false, pointRadius: 3.5, pointBackgroundColor: '#fff', pointBorderColor: '#0d1117', borderColor: '#fff', order: 1, _col: 'text', swatch: 'dot'});
+  return Object.assign({sec, kind: 'bar', stacked: true, labels: rows.map(r => ms(r.d)), datasets: ds, miss: [], zero: true, fmt: v => sgn(v, 1) + ' bn', asof: rows[rows.length - 1].d}, o);
+}
+CARDS.soma_chg = {id: 'soma_chg', sec: 's13', title: 'Fed holdings — weekly change by type', units: '$bn, Wednesday to Wednesday (par value); white dot = total', deps: ['somasum'], tall: true, build() {
+  const rows = wkRows(somaChanges(), 's13'); if (!rows.length) return null; const last = rows[rows.length - 1], lv = (DATA.somasum || []).slice(-1)[0];
+  return stackSpec('s13', rows, SOMA_TYPES, 'total', 'Total change', {hdr: `${dlabel(last.d)}: ${sgn(last.total, 1)} bn (bills ${sgn(last.bills, 1)}, MBS ${sgn(last.mbs, 1)}) · holdings ${lv ? (lv.total / 1000).toFixed(2) + ' tn' : ''}`,
+    note: 'Source: NY Fed SOMA summary. Bill purchases and MBS runoff show up here first.'});
+}};
+CARDS.res_drv = {id: 'res_drv', sec: 's13', title: 'What moved reserves this week', units: '$bn, Wednesday to Wednesday; bars add up to the white dot (change in reserves)', deps: ['h41', 'tga'], tall: true, build() {
+  const rows = wkRows(resDrivers(), 's13'); if (!rows.length) return null; const last = rows[rows.length - 1];
+  return stackSpec('s13', rows, RES_PARTS, 'res', 'Change in reserves', {hdr: `${dlabel(last.d)}: reserves ${sgn(last.res, 1)} bn to ${(last.level / 1000).toFixed(2)} tn`,
+    note: 'H.4.1 Wednesday levels from FRED (WALCL, WSHOSHO, WRBWFRBL, WLRRAL) and the TGA close from the Daily Treasury Statement. Positive = added reserves; a TGA or RRP increase shows as negative.'});
+}};
+function drawFedTable() {
+  const box = $('#fed-table'); if (!box) return; const D = resDrivers(), C = somaChanges();
+  if (!D.length && !C.length) { const loading = ['h41', 'somasum'].some(d => !STATUS[d] || STATUS[d].state === 'loading'); box.innerHTML = `<div class="muted" style="padding:12px;font-style:italic">${loading ? 'loading…' : 'no data – see status'}</div>`; return; }
+  const sum = (rows, k, n) => rows.slice(-n).reduce((a, r) => a + r[k], 0), f = v => v == null || !isFinite(v) ? '—' : sgn(v, 1), cls = v => v > 0.05 ? 'up' : v < -0.05 ? 'dn' : '';
+  const row = (label, rows, k) => `<tr><td>${label}</td>${[1, 4, 13].map(n => { const v = rows.length >= n ? sum(rows, k, n) : null; return `<td class="n ${cls(v)}">${f(v)}</td>`; }).join('')}</tr>`;
+  let h = '<table><thead><tr><th></th><th class="n">Latest week</th><th class="n">Last 4 weeks</th><th class="n">Last 13 weeks</th></tr></thead><tbody>';
+  h += '<tr><td colspan="4" class="muted"><b>Change in reserves and what drove it</b></td></tr>' + row('<b>Reserves</b>', D, 'res') + RES_PARTS.map(([k, l]) => row('&nbsp;&nbsp;' + l, D, k)).join('');
+  h += '<tr><td colspan="4" class="muted"><b>Fed holdings by type</b></td></tr>' + row('<b>Total</b>', C, 'total') + SOMA_TYPES.map(([k, l]) => row('&nbsp;&nbsp;' + l, C, k)).join('');
+  box.innerHTML = h + '</tbody></table>';
+  $('#fed-table-ft').textContent = `$bn, summed weekly changes · latest week ${D.length ? D[D.length - 1].d : ''} (balance sheet), ${C.length ? C[C.length - 1].d : ''} (holdings)`;
+}
+
+/* ---------- Analysis · month-end and quarter-end ---------- */
+// Each month's last business day (a fixing date) against the 5 fixings before it
+const ME_MEAS = {se: ['Rate − EFFR on the last day', 'bp'], dse: ['Δ (rate − EFFR) vs 5 days before', 'bp'], p99: ['99th pct − median on the last day', 'bp'], si: ['Rate − IORB on the last day', 'bp'],
+  d: ['Rate Δ vs 5 days before (includes Fed moves)', 'bp'], srf: ['SRF take-up on the last day', 'bn'], rrp: ['ON RRP on the last day', 'bn'], drrp: ['ON RRP Δ vs 5-day average before', 'bn']};
+function meRows() {
+  const R = (DATA[OPT.eRate] || []).filter(r => isFinite(r.rate)); if (!R.length) return [];
+  const em = new Map((DATA.effr || []).filter(r => isFinite(r.rate)).map(r => [r.d, r.rate])), IO = (DATA.iorb || []).filter(r => isFinite(r.v));
+  const srf = new Map((DATA.srf || []).map(r => [r.d, r.v])), rrp = new Map((DATA.rrponts || []).map(r => [r.d, r.v]));
+  const dates = R.map(r => r.d), byD = new Map(R.map(r => [r.d, r])), last = dates[dates.length - 1], out = [];
+  for (let m = addMonths(dates[0].slice(0, 8) + '01', 1, false); m.slice(0, 7) <= last.slice(0, 7); m = addMonths(m, 1, false)) {
+    const ym = m.slice(0, 7), lbd = prevBiz(addMonths(m, 0, true)); if (lbd > last) continue;   // month not finished
+    const me = dates.filter(d => d.slice(0, 7) === ym && d <= lbd).pop(); if (!me) continue;
+    const i0 = dates.indexOf(me), pre = dates.slice(Math.max(0, i0 - 5), i0); if (!pre.length) continue;
+    const r = byD.get(me), e = em.get(me), io = stepAt(IO, me, 'v'), avg = f => { const a = pre.map(f).filter(v => v != null && isFinite(v)); return a.length ? mean(a) : null; };
+    const se = e != null ? (r.rate - e) * 100 : null, spe = avg(d => em.has(d) ? (byD.get(d).rate - em.get(d)) * 100 : null), rp = avg(d => rrp.get(d));
+    out.push({ym, y: +ym.slice(0, 4), mo: +ym.slice(5) - 1, me, q: +ym.slice(5) % 3 === 0, rate: r.rate, pre: avg(d => byD.get(d).rate), se, dse: se != null && spe != null ? se - spe : null,
+      p99: isFinite(r.p99) ? (r.p99 - r.rate) * 100 : null, si: io != null ? (r.rate - io) * 100 : null, d: (r.rate - avg(d => byD.get(d).rate)) * 100,
+      srf: srf.has(me) ? srf.get(me) : 0, rrp: rrp.has(me) ? rrp.get(me) : null, drrp: rrp.has(me) && rp != null ? rrp.get(me) - rp : null});
+  }
+  return out;
+}
+const eDec = () => ME_MEAS[OPT.eMeas][1] === 'bn' ? 0 : 1;
+const eVal = r => r[OPT.eMeas] == null ? null : Math.round(r[OPT.eMeas] * 10) / 10;
+const eFmt = v => ME_MEAS[OPT.eMeas][1] === 'bn' ? v.toFixed(0) + ' bn' : sgn(v, 1) + ' bp';
+const eUnits = () => `${ME_MEAS[OPT.eMeas][0]} (${ME_MEAS[OPT.eMeas][1]}) · ${GSE_RATES[OPT.eRate]} · amber = quarter-end`;
+const eDefM = rows => OPT.eM != null ? OPT.eM : (rows.length ? rows[rows.length - 1].mo : 0);
+const eDefY = rows => OPT.eY != null ? OPT.eY : (rows.length ? rows[rows.length - 1].y : +TODAY.slice(0, 4));
+function meBars(rows, labels) {
+  const b = css('--blue'), q = css('--yellow');
+  return {sec: null, kind: 'bar', cat: true, labels, datasets: [{label: ME_MEAS[OPT.eMeas][0], data: rows.map(eVal), backgroundColor: rows.map(r => alpha(r.q ? q : b, .9)), borderWidth: 0, _col: 'blue', swatch: 'bar', netLabel: true, netDec: eDec()}],
+    miss: [], zero: true, zero0: true, fmt: eFmt, asof: rows.length ? rows[rows.length - 1].me : ''};
+}
+CARDS.me_month = {id: 'me_month', sec: 's14', get title() { return 'Month-end by year — ' + MON[eDefM(meRows())]; }, get units() { return eUnits(); }, deps: ['sofr', 'tgcr', 'bgcr', 'effr', 'iorb', 'srf', 'rrponts'], tall: true, build() {
+  const rows = meRows(), mo = eDefM(rows), sel = rows.filter(r => r.mo === mo); if (!sel.length) return null;
+  const s = meBars(sel, sel.map(r => String(r.y))); s.note = sel.map(r => `${r.y}: ${dlabel(r.me)}`).join(' · '); return s;
+}};
+CARDS.me_year = {id: 'me_year', sec: 's14', get title() { return 'Month-end by month — ' + eDefY(meRows()); }, get units() { return eUnits(); }, deps: ['sofr', 'tgcr', 'bgcr', 'effr', 'iorb', 'srf', 'rrponts'], tall: true, build() {
+  const rows = meRows(), y = eDefY(rows), sel = rows.filter(r => r.y === y); if (!sel.length) return null;
+  const s = meBars(sel, sel.map(r => MON[r.mo])); s.note = 'Last business day of each month vs the 5 fixings before it; months still in progress are left out.'; return s;
+}};
+function drawMeTables() {
+  const g = $('#me-grid'), t = $('#me-table'); if (!g) return;
+  const c = $('#s14 .ctl'); if (c && !c.contains(document.activeElement)) c.innerHTML = SECTIONS.find(x => x.id === 's14').ctl();
+  const rows = meRows(); const loading = ['sofr', 'effr'].some(d => !STATUS[d] || STATUS[d].state === 'loading');
+  if (!rows.length) { g.innerHTML = t.innerHTML = `<div class="muted" style="padding:12px;font-style:italic">${loading ? 'loading…' : 'no data – see status'}</div>`; return; }
+  const vals = rows.map(eVal).filter(v => v != null), mx = Math.max(...vals.map(Math.abs)) || 1, by = new Map(rows.map(r => [r.ym, r])), ys = [...new Set(rows.map(r => r.y))].sort((a, b) => b - a);
+  const cell = v => (eDec() ? v.toFixed(1) : v.toFixed(0));
+  let h = `<table><thead><tr><th>Year</th>${MON.map((m, i) => `<th class="n"${(i + 1) % 3 ? '' : ' style="color:var(--yellow)"'}>${m}</th>`).join('')}<th class="n">Avg</th></tr></thead><tbody>`;
+  for (const y of ys) {
+    const vs = MON.map((_, i) => { const r = by.get(`${y}-${pad(i + 1)}`); return r ? eVal(r) : null; }), ok = vs.filter(v => v != null);
+    h += `<tr><td>${y}</td>${vs.map(v => v == null ? '<td></td>' : `<td class="n h" style="background:${heatBg(v, -mx, 0, mx)};color:#111">${cell(v)}</td>`).join('')}<td class="n">${ok.length ? cell(mean(ok)) : ''}</td></tr>`;
+  }
+  const colAvg = MON.map((_, i) => { const a = rows.filter(r => r.mo === i).map(eVal).filter(v => v != null); return a.length ? mean(a) : null; });
+  g.innerHTML = h + `</tbody><tfoot><tr><td>Avg</td>${colAvg.map(v => `<td class="n">${v == null ? '' : cell(v)}</td>`).join('')}<td></td></tr></tfoot></table>`;
+  $('#me-grid-ft').textContent = `${ME_MEAS[OPT.eMeas][0]} (${ME_MEAS[OPT.eMeas][1]}) · ${GSE_RATES[OPT.eRate]} · quarter-end months in amber`;
+  const R = GSE_RATES[OPT.eRate], f3 = v => v == null ? '—' : v.toFixed(3), f1 = v => v == null ? '—' : sgn(v, 1), f0 = v => v == null ? '—' : v.toFixed(0);
+  let d = `<table><thead><tr><th>Month</th><th>Last day</th><th class="n">${R}</th><th class="n">5 days before</th><th class="n">Δ bp</th><th class="n">${R} − EFFR</th><th class="n">Δ vs before</th><th class="n">99th − median</th><th class="n">${R} − IORB</th><th class="n">SRF bn</th><th class="n">ON RRP bn</th><th class="n">RRP Δ bn</th></tr></thead><tbody>`;
+  for (const r of rows.slice().reverse()) d += `<tr style="${r.q ? 'color:var(--yellow)' : ''}"><td>${ymLabel(r.ym)}${r.q ? ' (QE)' : ''}</td><td>${dlabel(r.me)}</td><td class="n">${f3(r.rate)}</td><td class="n">${f3(r.pre)}</td><td class="n">${f1(r.d)}</td><td class="n">${f1(r.se)}</td><td class="n">${f1(r.dse)}</td><td class="n">${f1(r.p99)}</td><td class="n">${f1(r.si)}</td><td class="n">${f0(r.srf)}</td><td class="n">${f0(r.rrp)}</td><td class="n">${r.drrp == null ? '—' : sgn(r.drrp, 0)}</td></tr>`;
+  t.innerHTML = d + '</tbody></table>';
+  $('#me-table-ft').textContent = `${rows.length} month-ends · rates in %, spreads and Δ in bp, volumes in $bn · QE = quarter-end`;
+}
+
+/* ---------- Today summary (top of the dashboard) ---------- */
+const TODAY_BOXES = [
+  ['Overnight rates', '%', ['L:SFR', 'L:TG', 'L:BG', 'L:EFFR', 'L:GCO', 'L:DVP', 'L:IORB', 'L:RRP', 'L:SRF']],
+  ['Spreads', 'bp', ['S:SFR:IORB', 'S:SFR:EFFR', 'S:SFR:RRP', 'S:TG:RRP', 'S:GCO:SFR', 'S:DVP:SFR', 'S:SFR99:SFR', 'S:SFR75:SFR25']],
+  ['Liquidity', '$bn', ['L:RES', 'L:RRPVOL', 'L:TGA', 'L:SRFVOL', 'L:SFRVOL', 'L:PDNET']],
+  ['Bills and Treasuries', '', ['S:BILL1M:SFR', 'S:BILL3M:SFR', 'L:UST2', 'L:UST7']]
+];
+const WEEKLY = new Set(['RES', 'PDNET', 'PDREPO', 'PDRREPO', 'SOMA']);
+function todayStat(id) {   // latest value, change since the previous print and since a week earlier, on the series' own dates
+  TM = {}; const m = metric(id); if (!m) return null; const [, a, b] = id.split(':'), lead = BASES[a].step && b ? BASES[b] : BASES[a];
+  const ds = (DATA[lead.id] || []).filter(r => isFinite(r[lead.k])).map(r => r.d); let i = ds.length - 1;
+  while (i >= 0 && m.val(ds[i]) == null) i--; if (i < 0) return null;
+  const d = ds[i], v = m.val(d), wk = WEEKLY.has(a);
+  let j = i - 1; while (j >= 0 && m.val(ds[j]) == null) j--;
+  let k = i - 1; const wd = addDays(d, -7); while (k >= 0 && (ds[k] > wd || m.val(ds[k]) == null)) k--;
+  const scale = m.unit === '%' ? 100 : 1;   // rate changes in bp
+  return {m, d, v, d1: !wk && j >= 0 ? (v - m.val(ds[j])) * scale : null, d7: wk ? (j >= 0 ? (v - m.val(ds[j])) * scale : null) : k >= 0 ? (v - m.val(ds[k])) * scale : null, wk};
+}
+function nextEvents() {
+  const ev = calEvents(TODAY, addMonths(TODAY, 4, false)), first = k => (ev.list.filter(e => e.k === k).sort((x, y) => x.d < y.d ? -1 : 1)[0] || {}).d;
+  const lbd = ym => prevBiz(addMonths(ym + '-01', 0, true));
+  let me = lbd(TODAY.slice(0, 7)); if (me < TODAY) me = lbd(addMonths(TODAY.slice(0, 8) + '01', 1, false).slice(0, 7));
+  let qe = me; while (+qe.slice(5, 7) % 3) qe = lbd(addMonths(qe.slice(0, 8) + '01', 1, false).slice(0, 7));
+  const g = ev.gse.filter(x => x.e > TODAY).sort((x, y) => x.s < y.s ? -1 : 1)[0];
+  const fomc = FOMC.find(d => d >= TODAY);
+  return {me, qe, tax: first('tax'), gse: g, fomc};
+}
+function drawToday() {
+  const box = $('#today'); if (!box) return;
+  if (!Object.keys(STATUS).length) { box.innerHTML = '<div class="muted" style="padding:8px">loading…</div>'; return; }
+  const sofrD = (DATA.sofr || []).length ? DATA.sofr[DATA.sofr.length - 1].d : '';
+  const fv = (u, v, code) => u === '%' ? v.toFixed(code === 'GCO' ? 3 : 2) : u === 'bp' ? v.toFixed(1) : v >= 1000 ? v.toFixed(0) : v.toFixed(1);
+  const fd = (u, v) => v == null ? '<span class="muted">—</span>' : `<span class="${Math.abs(v) < 0.05 ? 'muted' : ''}">${sgn(v, u === 'bn' && Math.abs(v) >= 100 ? 0 : 1)}</span>`;
+  let h = '';
+  for (const [title, unit, ids] of TODAY_BOXES) {
+    h += `<div class="card tbox"><div class="ct">${title} <span class="cu">${unit}</span></div><table><thead><tr><th></th><th class="n">Latest</th><th class="n">Δ 1d</th><th class="n">Δ 1w</th></tr></thead><tbody>`;
+    for (const id of ids) {
+      const st = todayStat(id), code = id.split(':')[1];
+      if (!st) { h += `<tr><td>${esc((metric(id) || {}).label || id)}</td><td class="n muted" colspan="3">n/a</td></tr>`; continue; }
+      const du = st.m.unit === 'bn' ? 'bn' : 'bp', stale = st.d !== sofrD ? ` <span class="muted">${dlabel(st.d)}${st.wk ? ' (wk)' : ''}</span>` : '';
+      h += `<tr title="${esc(st.m.title)}"><td>${esc(st.m.label)}${stale}</td><td class="n"><b>${fv(st.m.unit, st.v, code)}</b></td><td class="n">${fd(du, st.d1)}</td><td class="n">${fd(du, st.d7)}</td></tr>`;
+    }
+    h += '</tbody></table></div>';
+  }
+  // calendar and flows
+  const n = (() => { try { return computeNI(); } catch (e) { return null; } })(), nx = n && n.days.find(r => r.d >= TODAY);
+  const sr = sr1zq(), cur = sr.find(r => r.ym === TODAY.slice(0, 7)), e = nextEvents();
+  const inD = d => { const k = Math.round((ms(d) - ms(TODAY)) / 864e5); return k === 0 ? 'today' : k === 1 ? 'tomorrow' : `${k}d`; };
+  const rows = [
+    ['Next settlement', nx ? `${sgn(nx.net, 0)} bn${nx.est ? ' est.' : ''} · ${dlabel(nx.d)}` : 'n/a', nx ? inD(nx.d) : ''],
+    ['SR1 − ZQ ' + MON[+TODAY.slice(5, 7) - 1], cur ? `${sgn(cur.expS, 1)} bp` : 'n/a', cur ? `${cur.fixed}/${cur.n} fixed` : ''],
+    ['Month-end', dlabel(e.me), inD(e.me)], ['Quarter-end', dlabel(e.qe), inD(e.qe)],
+    ['Tax date', e.tax ? dlabel(e.tax) : 'n/a', e.tax ? inD(e.tax) : ''],
+    ['GSE cash window', e.gse ? `${dlabel(e.gse.s)}–${+addDays(e.gse.e, -1).slice(8)}` : 'n/a', e.gse ? (e.gse.s <= TODAY ? 'now' : inD(e.gse.s)) : ''],
+    ['Fed meeting', e.fomc ? dlabel(e.fomc) : 'add dates to FOMC', e.fomc ? inD(e.fomc) : '']];
+  h += `<div class="card tbox cal"><div class="ct">Calendar and flows</div><table><tbody>${rows.map(([a, b, c]) => `<tr><td>${a}</td><td class="n"><b>${b}</b></td><td class="n muted">${c}</td></tr>`).join('')}</tbody></table></div>`;
+  box.innerHTML = h;
+  $('#today-asof').textContent = sofrD ? `· fixings for ${dlabel(sofrD)} ${sofrD.slice(0, 4)}; a date next to a row = its latest print is older` : '';
+}
+
 /* ---------- sections ---------- */
 const SECTIONS = [
+  {id: 's0', title: 'Today', sentence: 'Latest print of each series with its change since the previous print (Δ 1d) and a week earlier (Δ 1w); rate changes in bp. Weekly series show the week-on-week change.', cls: 'gtoday', cards: [], today: true},
   {id: 's1', title: '1 · Treasury net issuance', sentence: 'Net issuance = new securities sold − publicly held maturities (outstanding minus Fed SOMA holdings) − coupon interest paid; a positive number drains cash from repo lenders.', cls: 'g2', cards: ['ni_days', 'ni_months'], extra: 'table'},
   {id: 's2', title: '2 · Repo against the Fed\'s corridor', sentence: 'Overnight repo and fed funds against the Fed\'s floor (RRP), IORB and ceiling (SRF), so you can see how close funding is to either edge.', cls: 'g2', cards: ['rates', 'sofrband', 'dtcc_idx']},
   {id: 's3', title: '3 · Spreads', sentence: 'Pairwise gaps between overnight rates in basis points: small, stable gaps mean abundant cash; widening gaps mean pressure.',
@@ -1172,15 +1394,17 @@ const SECTIONS = [
     cls: 'g3', cards: spreadCards.map(c => c[0])},   // 9 cards: 3x3
   {id: 's4', title: '4 · Dispersion', sentence: 'How spread out trades are within a day: a wider spread between the percentiles means a more fragmented, stressed market.', cls: 'g2', cards: ['disp1', 'disp2']},
   {id: 's5', title: '5 · Liquidity', sentence: 'Reserves, Fed facilities, the Treasury\'s cash balance and volumes: the quantities that drive repo pricing.', cls: 'g3', cards: ['reserves', 'resgdp', 'rrpuse', 'tga', 'srf', 'vols']},
-  {id: 's6', title: '6 · Monthly net issuance — history', sentence: 'How much marketable Treasury debt outstanding grew each month, split by bills, notes, bonds, TIPS and FRNs; positive = net new supply the market had to absorb.', cls: 'g1', cards: ['ni_hist'],
+  {id: 's13', title: '6 · Fed balance sheet and reserves', sentence: 'What the Fed is adding or letting run off, and what moved reserves each week: Fed securities and lending add reserves; a rising TGA or ON RRP drains them.', cls: 'g2', cards: ['soma_chg', 'res_drv'],
+    ranges: [[3, '3M'], [6, '6M'], [12, '1Y'], [24, '2Y'], [60, '5Y']], tables: [{id: 'fed-table', title: 'Summary', units: 'cumulative weekly changes, $bn'}]},
+  {id: 's6', title: '7 · Monthly net issuance — history', sentence: 'How much marketable Treasury debt outstanding grew each month, split by bills, notes, bonds, TIPS and FRNs; positive = net new supply the market had to absorb.', cls: 'g1', cards: ['ni_hist'],
     ranges: [[12, '1Y'], [24, '2Y'], [36, '3Y'], [60, '5Y']], min: HSTART},
-  {id: 's7', title: '7 · GC vs. IORB', sentence: 'When general-collateral repo trades above IORB, cash is scarce enough that lending in repo beats leaving reserves at the Fed. Pick the GC series and threshold; the table lists every day at or above it and where SOFR was.',
+  {id: 's7', title: '8 · GC vs. IORB', sentence: 'When general-collateral repo trades above IORB, cash is scarce enough that lending in repo beats leaving reserves at the Fed. Pick the GC series and threshold; the table lists every day at or above it and where SOFR was.',
     cls: 'g2', cards: ['gc_sofr2', 'sofr_iorb2', 'gc_iorb', 'gc_scatter'], ctl: () => `GC <span class="seg" data-opt="gc">${Object.entries({dtcc: 'DTCC GCF', ofr: 'OFR GCF', tgcr: 'TGCR'}).map(([k, l]) => `<button data-v="${k}" class="${OPT.gc === k ? 'on' : ''}">${l}</button>`).join('')}</span> ≥ IORB + <input type="number" step="0.5" data-opt="th" value="${OPT.th}"> bp`,
     tables: [{id: 'gc-table', title: 'Days GC was at or above the threshold over IORB', units: 'newest first; rates in %, spreads in bp'}]},
-  {id: 's8', title: '8 · 2-year and 7-year Treasuries', sentence: 'Daily and monthly moves in the 2y and 7y benchmark yields, as a yield change or as the price change of a par bond.', cls: 'g2', cards: ['ust_lvl', 'ust_m', 'ust_d_dgs2', 'ust_d_dgs7'],
+  {id: 's8', title: '9 · 2-year and 7-year Treasuries', sentence: 'Daily and monthly moves in the 2y and 7y benchmark yields, as a yield change or as the price change of a par bond.', cls: 'g2', cards: ['ust_lvl', 'ust_m', 'ust_d_dgs2', 'ust_d_dgs7'],
     ctl: () => `show <span class="seg" data-opt="ust">${[['bp', 'Yield (bp)'], ['px', 'Price']].map(([k, l]) => `<button data-v="${k}" class="${OPT.ust === k ? 'on' : ''}">${l}</button>`).join('')}</span>`,
     tables: [{id: 'ust-table', title: 'Recent sessions', units: 'yield %, change in bp and price per 100 face'}]},
-  {id: 's9', title: '9 · SR1 − ZQ expiries', sentence: 'One-month SOFR (SR1) and fed funds (ZQ) futures each settle at 100 − the month\'s average daily rate over every calendar day, rounded to 3dp; the expiry spread SR1 − ZQ in bp = (EFFR avg − SOFR avg) × 100.',
+  {id: 's9', title: '10 · SR1 − ZQ expiries', sentence: 'One-month SOFR (SR1) and fed funds (ZQ) futures each settle at 100 − the month\'s average daily rate over every calendar day, rounded to 3dp; the expiry spread SR1 − ZQ in bp = (EFFR avg − SOFR avg) × 100.',
     cls: 'g1', cards: ['sr1_exp'], ranges: [[6, '6M'], [12, '1Y'], [24, '2Y']],
     ctl: () => `rest of month: SOFR <input type="number" step="0.001" data-opt="prS" placeholder="last" value="${OPT.prS ?? ''}" style="width:70px"> EFFR <input type="number" step="0.001" data-opt="prE" placeholder="last" value="${OPT.prE ?? ''}" style="width:70px"> %`,
     tables: [{id: 'sr1-table', title: 'Monthly settlement', units: 'averages in %, prices = 100 − average, Exp in bp'}, {id: 'sr1-daily', title: 'Daily fixings', units: 'calendar days; italic = projected'}]},
@@ -1195,9 +1419,19 @@ const SECTIONS = [
         window <input type="number" data-opt="gStart" min="1" max="27" value="${OPT.gStart || 18}" style="width:46px">th to <input type="number" data-opt="gPay" min="2" max="28" value="${OPT.gPay || 25}" style="width:46px">th (payment)`; },
     tables: [{id: 'gse-grid', title: 'Year × month', units: 'the measure picked above; red = lower, blue = higher (bp measures centred on zero)'}, {id: 'gse-table', title: 'Every month', units: 'averages over the window\'s fixing dates vs the 5 fixings before it'}]},
   {id: 's11', view: 'analysis', title: 'Bills vs. SOFR', sentence: 'Money funds choose between bills, repo and the Fed\'s RRP: bill yields relative to SOFR show which way cash is being pulled.', cls: 'g2', cards: ['bill_sofr', 'bill_lvl'], ranges: [[3, '3M'], [6, '6M'], [12, '1Y'], [24, '2Y'], [60, '5Y']]},
+  {id: 's14', view: 'analysis', title: 'Month-end and quarter-end', sentence: 'How funding behaves on the last business day of each month versus the days before it; quarter-ends (amber) are usually the sharpest.',
+    cls: 'g2', cards: ['me_month', 'me_year'], ctl: () => {
+      const rows = meRows(), ys = [...new Set(rows.map(r => r.y))].sort((a, b) => b - a), m = eDefM(rows), y = eDefY(rows);
+      const opt = (o, sel) => Object.entries(o).map(([k, l]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${Array.isArray(l) ? l[0] : l}</option>`).join('');
+      return `rate <select data-opt="eRate">${opt(GSE_RATES, OPT.eRate)}</select> show <select data-opt="eMeas">${opt(ME_MEAS, OPT.eMeas)}</select>
+        month <select data-opt="eM" data-num="1">${MON.map((l, i) => `<option value="${i}"${i === m ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        year <select data-opt="eY" data-num="1">${(ys.length ? ys : [y]).map(v => `<option${v === y ? ' selected' : ''}>${v}</option>`).join('')}</select>`; },
+    tables: [{id: 'me-grid', title: 'Year × month', units: 'the measure picked above; red = lower, blue = higher, centred on zero'}, {id: 'me-table', title: 'Every month-end', units: 'last business day vs the 5 fixings before it'}]},
   {id: 's12', view: 'analysis', title: 'Primary dealer positioning', sentence: 'How many Treasuries dealers hold and how they finance them: rising inventories mean more repo demand.', cls: 'g2', cards: ['pd_pos', 'pd_fin'], ranges: [[6, '6M'], [12, '1Y'], [24, '2Y'], [60, '5Y']]}
 ];
-const TABLES = [{deps: ['td_out', 'td_upcoming', 'soma'], draw: () => drawTable()}, {deps: ['sofr', 'iorb', 'dtcc', 'gcf_ofr', 'tgcr'], sec: 's7', draw: () => drawGcTable()}, {deps: ['dgs2', 'dgs7'], sec: 's8', draw: () => drawUstTable()}, {deps: ['sofr', 'effr'], sec: 's9', draw: () => drawSr1Tables()}, {deps: ['sofr', 'tgcr', 'bgcr', 'effr', 'iorb'], sec: 's10', draw: () => drawGseTables()}];
+const TABLES = [{deps: ['td_out', 'td_upcoming', 'soma'], draw: () => drawTable()}, {deps: ['sofr', 'iorb', 'dtcc', 'gcf_ofr', 'tgcr'], sec: 's7', draw: () => drawGcTable()}, {deps: ['dgs2', 'dgs7'], sec: 's8', draw: () => drawUstTable()}, {deps: ['sofr', 'effr'], sec: 's9', draw: () => drawSr1Tables()}, {deps: ['sofr', 'tgcr', 'bgcr', 'effr', 'iorb'], sec: 's10', draw: () => drawGseTables()},
+  {deps: ['h41', 'tga', 'somasum'], sec: 's13', draw: () => drawFedTable()}, {deps: ['sofr', 'tgcr', 'bgcr', 'effr', 'iorb', 'srf', 'rrponts'], sec: 's14', draw: () => drawMeTables()},
+  {deps: null, sec: 's0', draw: () => drawToday()}];   // null = redraw on every series
 function buildDOM() {
   $('#sections').innerHTML = ''; $('#analysispage').innerHTML = '';
   for (const s of SECTIONS) {
@@ -1205,6 +1439,7 @@ function buildDOM() {
     const sec = document.createElement('section'); sec.id = s.id;
     const rc = RNG[s.id] ? `<span class="sr" data-sec="${s.id}"><span class="seg">${(s.ranges || [[3, '3M'], [6, '6M'], [12, '1Y'], [24, '2Y']]).map(([m, l]) => `<button data-m="${m}">${l}</button>`).join('')}</span> <label class="muted">from <input type="date" min="${s.min || START}" max="${TODAY}"></label></span>` : '';
     const ctl = s.ctl ? `<span class="ctl muted" data-sec="${s.id}">${s.ctl()}</span>` : '';
+    if (s.today) { sec.innerHTML = `<h2>${s.title} <span class="muted" id="today-asof" style="font-size:12px;font-weight:400"></span></h2><p class="sentence">${s.sentence}</p><div class="grid gtoday" id="today"></div>`; root.appendChild(sec); continue; }
     sec.innerHTML = `<h2>${s.title}${rc}${ctl}</h2><p class="sentence">${s.sentence}</p>${s.intro ? `<p class="intro">${s.intro}</p>` : ''}<div class="grid ${s.cls}"></div>`;
     const grid = $('.grid', sec);
     for (const cid of s.cards) {
@@ -1236,7 +1471,7 @@ function scheduleRender(id) {
 function renderFor(ids) {
   for (const k in G) delete G[k];
   for (const cid in CARDS) { const c = CARDS[cid]; if (!ids || ids.some(i => c.deps.includes(i))) drawCard(c); }
-  for (const t of TABLES) if (!ids || ids.some(i => t.deps.includes(i))) t.draw();
+  for (const t of TABLES) if (!ids || !t.deps || ids.some(i => t.deps.includes(i))) t.draw();
   if (document.body.classList.contains('tview')) drawTbl();
 }
 function drawCard(c) {
@@ -1264,7 +1499,7 @@ function drawCard(c) {
         tooltip: {mode: spec.lin ? 'nearest' : 'index', intersect: !!spec.lin, backgroundColor: '#1c2128', borderColor: '#30363d', borderWidth: 1, titleColor: '#e6edf3', bodyColor: '#c9d1d9',
           filter: i => i.raw != null && !i.dataset.noTip, callbacks: {label: i => spec.tip ? spec.tip(i) : ` ${i.dataset.label}: ${i.dataset.yAxisID === 'y2' ? sgn(i.raw, 1) + ' bp' : fmt(i.raw)}`, title: it => spec.lin ? '' : undefined,
             afterBody: it => spec.estFlags && it.length && spec.estFlags[it[0].dataIndex] ? [spec.estText || '(estimate: includes projected auctions)'] : []}},
-        xh: {sec: spec.sec}, evt: {on: !!spec.evt}, zl: {on: !!spec.zero}, endl: {on: !!spec.endl}
+        xh: {sec: spec.sec}, evt: {on: !!spec.evt, time: !spec.cat && !spec.lin}, zl: {on: !!spec.zero}, endl: {on: !!spec.endl}
       }
     }
   };
@@ -1300,7 +1535,7 @@ function drawTable() {
 }
 
 /* ---------- status strip ---------- */
-const ORDER = ['sofr', 'tgcr', 'bgcr', 'effr', 'rrp', 'srf', 'soma', 'iorb', 'dfedtarl', 'dfedtaru', 'wresbal', 'gdp', 'rrponts', 'tga', 'td_upcoming', 'td_out', 'gcf_ofr', 'gcf_imp', 'dtcc', 'mspd', 'dgs2', 'dgs7', 'dgs1m', 'dgs3m', 'pd'];
+const ORDER = ['sofr', 'tgcr', 'bgcr', 'effr', 'rrp', 'srf', 'soma', 'iorb', 'dfedtarl', 'dfedtaru', 'wresbal', 'gdp', 'rrponts', 'tga', 'td_upcoming', 'td_out', 'gcf_ofr', 'gcf_imp', 'dtcc', 'mspd', 'dgs2', 'dgs7', 'dgs1m', 'dgs3m', 'pd', 'dvp', 'somasum', 'h41'];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 function renderStrip() {
   const strip = $('#strip'), notes = $('#notes'); let h = '', nh = '';
@@ -1351,7 +1586,7 @@ for (const root of [$('#sections'), $('#analysispage')]) {
 // section controls (GC series / threshold, yield vs price)
 const setOpt = (sec, k, v) => {
   OPT[k] = v; try { localStorage.setItem('fmm_opt', JSON.stringify(OPT)); } catch (e) {}
-  if (sec === 's10') { const S = SECTIONS.find(x => x.id === sec), c = $(`#${sec} .ctl`); if (c) c.innerHTML = S.ctl(); }   // year list and labels depend on the options
+  if (sec === 's10' || sec === 's14') { const S = SECTIONS.find(x => x.id === sec), c = $(`#${sec} .ctl`); if (c) c.innerHTML = S.ctl(); }   // year list and labels depend on the options
   redrawSecs([sec]);
 };
 for (const root of [$('#sections'), $('#analysispage')]) root.addEventListener('click', e => {
@@ -1364,6 +1599,8 @@ for (const root of [$('#sections'), $('#analysispage')]) root.addEventListener('
   if (Number.isFinite(v)) setOpt(i.closest('.ctl').dataset.sec, k, v); else if (k !== 'th') setOpt(i.closest('.ctl').dataset.sec, k, null);   // blank projection = carry the last fixing
 });
 $('#sections').addEventListener('click', e => { const tr = e.target.closest('#sr1-table tr[data-ym]'); if (tr) { SR1_SEL = tr.dataset.ym; drawSr1Tables(); } });
+$('#mk').checked = OPT.mk;
+$('#mk').onchange = () => { OPT.mk = $('#mk').checked; try { localStorage.setItem('fmm_opt', JSON.stringify(OPT)); } catch (e) {} for (const id in CHARTS) CHARTS[id].draw(); };
 $('#refresh').onclick = () => { buildDOM(); loadData(true); };
 $('#setbtn').onclick = () => $('#settings').classList.toggle('open');
 $('#in-key').value = CFG.key; $('#in-proxy').value = CFG.proxy; $('#in-src').value = CFG.src;
@@ -1391,9 +1628,11 @@ base('EFVOL', 'EFFR vol', 'EFFR volume', 'bn', 'effr', 'vol'); base('GCOVOL', 'G
 base('RRPVOL', 'RRP vol', 'ON RRP take-up', 'bn', 'rrponts', 'v'); base('SRFVOL', 'SRF vol', 'SRF take-up', 'bn', 'srf', 'v');
 base('BILL1M', '1m bill', '1m bill yield, money-market basis', '%', 'dgs1m', 'v'); base('BILL3M', '3m bill', '3m bill yield, money-market basis', '%', 'dgs3m', 'v');
 base('PDNET', 'PD net', 'Primary dealer net Treasury position (weekly)', 'bn', 'pd', 'pos', 1); base('PDREPO', 'PD repo', 'Primary dealer Treasury repo (weekly)', 'bn', 'pd', 'repo', 1); base('PDRREPO', 'PD rev repo', 'Primary dealer Treasury reverse repo (weekly)', 'bn', 'pd', 'rrepo', 1);
+base('DVP', 'DVP', 'DVP repo, overnight/open (OFR, prelim)', '%', 'dvp', 'v'); base('DVPVOL', 'DVP vol', 'DVP repo volume, overnight/open (OFR)', 'bn', 'dvp', 'vol');
+base('SOMA', 'SOMA', 'Fed holdings, total par (weekly)', 'bn', 'somasum', 'total', 1);
 base('TGA', 'TGA', 'Treasury General Account', 'bn', 'tga', 'v'); base('RES', 'Reserves', 'Bank reserves (weekly, carried)', 'bn', 'wresbal', 'v', 1);
 const SPREADS = ['SFR:EFFR', 'SFR:IORB', 'SFR:RRP', 'EFFR:IORB', 'EFFR:RRP', 'TG:RRP', 'TG:SFR', 'TG:IORB', 'BG:TG', 'BG:SFR', 'GCO:RRP', 'GCO:SFR', 'GCO:IORB', 'GCO:TG',
-  'GCF:SFR', 'GCF:RRP', 'GCF:IORB', 'GCFI:SFR', 'SFR75:SFR25', 'SFR99:SFR', 'SFR99:SFR1', 'SFR99:IORB', 'TG99:TG', 'BG99:TG99', 'BG99:BG', 'EF75:EF25', 'EF99:EFFR', 'SRF:SFR', 'UST7:UST2', 'BILL1M:SFR', 'BILL3M:SFR', 'BILL1M:RRP'];
+  'GCF:SFR', 'GCF:RRP', 'GCF:IORB', 'GCFI:SFR', 'SFR75:SFR25', 'SFR99:SFR', 'SFR99:SFR1', 'SFR99:IORB', 'TG99:TG', 'BG99:TG99', 'BG99:BG', 'EF75:EF25', 'EF99:EFFR', 'SRF:SFR', 'UST7:UST2', 'BILL1M:SFR', 'BILL3M:SFR', 'BILL1M:RRP', 'DVP:SFR', 'DVP:GCO', 'DVP:TG', 'DVP:IORB'];
 const TBL_DEFAULT = () => ({cols: [['S:SFR:EFFR', 1, 'L'], ['S:GCO:RRP', 1, 'L'], ['S:BG99:TG99', 0, 'L'], ['S:GCO:SFR', 0, 'L'], ['S:SFR75:SFR25', 0, 'L'], ['L:RRPVOL', 0, 'R'], ['L:RRP', 0, 'R']].map(([m, plot, ax]) => ({m, plot: !!plot, ax})),
   end: '', days: 30, heat: true, sr1: true, customs: []});
 const TBL = TBL_DEFAULT();
