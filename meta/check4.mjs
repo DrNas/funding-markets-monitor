@@ -1,22 +1,28 @@
-// one-off: recent EFFR upticks and the SOFR − EFFR spread around them (from the published daily snapshot)
+// one-off: which EFFR percentile moves the most day to day (excluding Fed rate-change days)
 const out = [];
 const j = await (await fetch('https://funding.manasbafna.com/data/latest.json?t=' + Date.now())).json();
-const S = j.series, sofr = new Map(S.sofr.data.map(r => [r.d, r])), effr = S.effr.data.filter(r => typeof r.rate === 'number');
-out.push(`snapshot ${j.generated}; EFFR through ${effr[effr.length - 1].d}, SOFR through ${S.sofr.latest}`);
-const bp = v => (v >= 0 ? '+' : '') + v.toFixed(1);
-const ups = [];
-for (let i = 1; i < effr.length; i++) {
-  const a = effr[i - 1], b = effr[i];
-  if (b.rate > a.rate + 1e-9) ups.push({i, prev: a, cur: b, policy: b.tf !== a.tf || b.tt !== a.tt});
-}
-out.push(`EFFR upticks in the data: ${ups.length} (of which ${ups.filter(u => u.policy).length} on Fed rate changes)`);
-out.push('Most recent upticks, excluding Fed rate changes (date | EFFR prev → new | SOFR prev / new | SOFR−EFFR day before | on the day | target range):');
-for (const u of ups.filter(u => !u.policy).slice(-8).reverse()) {
-  const sp = sofr.get(u.prev.d), sc = sofr.get(u.cur.d);
-  out.push(`  ${u.cur.d} | ${u.prev.rate.toFixed(2)} (${u.prev.d}) → ${u.cur.rate.toFixed(2)} | ${sp ? sp.rate.toFixed(2) : '—'} / ${sc ? sc.rate.toFixed(2) : '—'} | ${sp ? bp((sp.rate - u.prev.rate) * 100) : '—'} bp | ${sc ? bp((sc.rate - u.cur.rate) * 100) : '—'} bp | ${u.cur.tf}–${u.cur.tt}`);
-}
-out.push('Most recent Fed-rate-change upticks:');
-for (const u of ups.filter(u => u.policy).slice(-3).reverse()) out.push(`  ${u.cur.d} | ${u.prev.rate.toFixed(2)} → ${u.cur.rate.toFixed(2)} | range ${u.prev.tf}–${u.prev.tt} → ${u.cur.tf}–${u.cur.tt}`);
-out.push('Last 12 fixings (date | EFFR | SOFR | SOFR−EFFR):');
-for (const r of effr.slice(-12)) { const s = sofr.get(r.d); out.push(`  ${r.d} | ${r.rate.toFixed(2)} | ${s ? s.rate.toFixed(2) : '—'} | ${s ? bp((s.rate - r.rate) * 100) : '—'}`); }
+const E = j.series.effr.data, keys = [['p1', '1st'], ['p25', '25th'], ['rate', 'median (EFFR)'], ['p75', '75th'], ['p99', '99th']];
+const stats = (from, to) => {
+  const rows = E.filter(r => r.d >= from && r.d <= to);
+  const res = {};
+  for (const [k] of keys) res[k] = {n: 0, moved: 0, abs: 0, sq: 0, max: 0, maxD: '', up: 0, dn: 0};
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i - 1], b = rows[i]; if (a.tf !== b.tf || a.tt !== b.tt) continue;   // skip Fed rate changes
+    for (const [k] of keys) {
+      if (typeof a[k] !== 'number' || typeof b[k] !== 'number') continue;
+      const c = Math.round((b[k] - a[k]) * 1000) / 10, s = res[k];
+      s.n++; s.abs += Math.abs(c); s.sq += c * c; if (Math.abs(c) > 0.05) { s.moved++; c > 0 ? s.up++ : s.dn++; }
+      if (Math.abs(c) > Math.abs(s.max)) { s.max = c; s.maxD = b.d; }
+    }
+  }
+  out.push(`\n${from} to ${to}`);
+  out.push('percentile | days | days it moved | % of days | avg |move| bp | std dev bp | up / down | biggest move (date)');
+  for (const [k, l] of keys) { const s = res[k]; if (!s.n) continue;
+    out.push(`${l} | ${s.n} | ${s.moved} | ${(100 * s.moved / s.n).toFixed(0)}% | ${(s.abs / s.n).toFixed(2)} | ${Math.sqrt(s.sq / s.n).toFixed(2)} | ${s.up} / ${s.dn} | ${s.max > 0 ? '+' : ''}${s.max.toFixed(0)} (${s.maxD})`); }
+};
+const last = E[E.length - 1].d;
+out.push(`EFFR data ${E[0].d} to ${last}`);
+stats(E[0].d, last);
+stats('2025-11-01', last);
+stats('2026-05-01', last);
 (await import('node:fs')).writeFileSync('meta/check4.txt', out.join('\n') + '\n'); console.log(out.join('\n'));
